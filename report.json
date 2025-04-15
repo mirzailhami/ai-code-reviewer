@@ -1,0 +1,54 @@
+{
+  "screening_result": {
+    "valid": true,
+    "reason": null
+  },
+  "security_findings": [],
+  "quality_metrics": {
+    "maintainability_score": 50,
+    "code_smells": 2,
+    "doc_coverage": 0
+  },
+  "performance_metrics": {
+    "rating": 60,
+    "bottlenecks": [],
+    "optimization_suggestions": []
+  },
+  "scorecard": {
+    "code_quality": 50,
+    "security": 100,
+    "performance": 60,
+    "total": 6.8,
+    "nlp_results": [
+      {
+        "question": "The solution provides a unique approach to solving the given problem(s).",
+        "category": "Innovation & Creativity",
+        "answer": "The provided code is simple and does not show a unique approach to solving the problem. It only initializes FastAPI and creates a basic HTML page.",
+        "confidence": 4,
+        "weight": 20.0
+      },
+      {
+        "question": "Requirements are implemented completely according to the requirements without major use cases or experiences missing.",
+        "category": "Functionality & Completeness",
+        "answer": "The requirement seems implemented as per the given code, but the SonarQube issue indicates a major severity issue in the CSS module, which might affect the functionality and completeness.",
+        "confidence": 3,
+        "weight": 50.0
+      },
+      {
+        "question": "The technical solution is modern and designed with best practices to complement the requirements.",
+        "category": "Technical Implementation",
+        "answer": "Cannot determine if the technical solution is modern and designed with best practices based on the provided information.",
+        "confidence": 3,
+        "weight": 20.0
+      },
+      {
+        "question": "Complete and easy-to-follow documentation is included with the solution. This includes instructions to setup and run the solution in addition to a demo video.",
+        "category": "Presentation (Docs & Demo)",
+        "answer": "No documentation or demo video found in the provided code.",
+        "confidence": 5,
+        "weight": 10.0
+      }
+    ]
+  },
+  "timestamp": "2025-04-15T17:26:39.577755"
+}

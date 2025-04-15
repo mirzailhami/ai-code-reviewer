@@ -1,0 +1,25 @@
+.finding {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid;
+}
+
+.finding.critical {
+  border-color: #ef4444;
+  background: #fee2e2;
+}
+
+.finding.high {
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -1,0 +1,49 @@
+backends:
+  bedrock:
+    models:
+      mistral_large:
+        model_id: mistral.mistral-large-2402-v1:0
+        max_tokens: 256
+        temperature: 0.3
+        top_p: 0.9
+        top_k: 50
+      llama3_70b:
+        model_id: meta.llama3-70b-instruct-v1:0
+        max_tokens: 256
+        temperature: 0.5
+        top_p: 0.9
+      deepseek_r1:
+        model_id: deepseek.deepseek-r1
+        max_tokens: 256
+prompts:
+  nlp_questions:
+    system: "You are a code evaluation expert. Return JSON only: [{\"answer\": \"string\", \"confidence\": number}]."
+    user: |
+      Evaluate the code submission based on the following:
+      - SonarQube data: {sonar_data}
+      - Code samples: {code_samples}
+      - Specification: {spec}
+      - Questions: {questions}
+      Return JSON only: [{\"answer\": \"string\", \"confidence\": 1-5}].
+      Do not include prose, explanations, markdown, or code blocks.
+  security:
+    system: "You are a security expert. Return JSON only."
+    user: |
+      Analyze for security issues:
+      - SonarQube data: {sonar_data}
+      - Code samples: {code_samples}
+      Return JSON only: [] or [{\"issue\": \"string\", \"type\": \"string\", \"severity\": \"string\", \"confidence\": number, \"file\": \"string\", \"recommendation\": \"string\"}].
+  quality:
+    system: "You are a quality expert. Return scores as integers (0-100)."
+    user: |
+      Evaluate code quality:
+      - SonarQube data: {sonar_data}
+      - Code samples: {code_samples}
+      Return JSON only: {\"maintainability_score\": number, \"code_smells\": number, \"doc_coverage\": number}.
+  performance:
+    system: "You are a performance expert. Return scores as integers (0-100)."
+    user: |
+      Evaluate performance:
+      - SonarQube data: {sonar_data}
+      - Code samples: {code_samples}
+      Return JSON only: {\"rating\": number, \"bottlenecks\": [], \"optimization_suggestions\": []}.

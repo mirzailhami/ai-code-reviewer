@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./config:/app/config
+      - ./tests:/app/tests
+    environment:
+      - AWS_PROFILE=default
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
