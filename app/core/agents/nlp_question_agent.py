@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from .llm.manager import LLMManager
+from app.core.llm.manager import LLMManager
 import json
 import yaml
 import re
