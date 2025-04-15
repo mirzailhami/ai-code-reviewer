@@ -1,1 +1,8 @@
+.scannerwork
 .env
+.venv
+__pycache__/
+*.pyc
+server_log.txt
+cli_log.txt
+cli_debug.log
