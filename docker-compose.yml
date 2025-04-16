@@ -1,13 +1,62 @@
+# Docker Compose configuration for AI Code Reviewer
 version: '3.8'
 services:
   app:
+    # Build from local Dockerfile
     build: .
+    # Map host port to container port
     ports:
       - "8000:8000"
+    # Mount configuration directory
     volumes:
-      - ./models:/app/models
       - ./config:/app/config
-      - ./tests:/app/tests
+    # Environment for AWS (Elastic Beanstalk uses IAM roles)
     environment:
-      - AWS_PROFILE=default
+      - AWS_DEFAULT_REGION=us-east-1
+    # Healthcheck for service reliability
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Restart policy
+    restart: unless-stopped
+    # Run FastAPI with Uvicorn
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  sonarqube:
+    # Use official SonarQube community edition
+    image: sonarqube:community
+    # Map default SonarQube port
+    ports:
+      - "9000:9000"
+    # Persist SonarQube data
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+    # Environment for default admin credentials
+    environment:
+      - SONAR_JDBC_URL=jdbc:postgresql://db:5432/sonar
+      - SONAR_JDBC_USERNAME=sonar
+      - SONAR_JDBC_PASSWORD=sonar
+    # Depends on PostgreSQL service
+    depends_on:
+      - db
+
+  db:
+    # Use PostgreSQL for SonarQube
+    image: postgres:13
+    # Persist database data
+    volumes:
+      - sonarqube_db:/var/lib/postgresql/data
+    # Environment for database setup
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=sonar
+      - POSTGRES_DB=sonar
+
+# Define persistent volumes
+volumes:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_db:
