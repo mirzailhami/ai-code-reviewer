@@ -42,6 +42,17 @@ async def get_models():
         print(f"Error in get_models: {str(e)}")
         return {"bedrock": ["llama3_70b", "mistral_large", "deepseek_r1"]}
 
+@app.get("/api/test-bedrock")
+async def test_bedrock():
+    try:
+        import boto3
+        client = boto3.client('bedrock', region_name='us-east-1')
+        models = client.list_foundation_models()['modelSummaries']
+        return {"status": "success", "models": [m['modelId'] for m in models]}
+    except Exception as e:
+        logger.error(f"Bedrock test failed: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}
+
 @app.post("/api/analyze")
 async def analyze(
     sonar_report: UploadFile = File(...),
