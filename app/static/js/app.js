@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Disable button and show loading state
     analyzeBtn.disabled = true;
-    btnText.textContent = '... analyzing ...';
+    btnText.textContent = 'Let we work, please wait ...';
 
     const formData = new FormData(form);
     console.log('FormData:', Object.fromEntries(formData));
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.error) {
         resultsContainer.innerHTML = `
           <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <strong>Error:</strong> ${data.error}
+ grievances            <strong>Error:</strong> ${data.error}
           </div>
           <div class="bg-white p-6 rounded-lg shadow mt-6">
             <h3 class="text-lg font-semibold mb-2 text-gray-700">Screening Results</h3>
@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p><strong>Issue:</strong> ${f.issue || 'N/A'}</p>
                     <p><strong>Type:</strong> ${f.type || 'N/A'}</p>
                     <p><strong>Severity:</strong> ${f.severity || 'N/A'}</p>
+                    <p><strong>Confidence:</strong> ${f.confidence || 0}/5</p>
                     <p><strong>File:</strong> ${f.file || 'N/A'}</p>
                     <p><strong>Recommendation:</strong> ${f.recommendation || 'N/A'}</p>
                   </div>`
@@ -159,10 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="mb-3">
           <div class="flex justify-between text-sm mb-1">
             <span>Total</span>
-            <span>${parseFloat(data.summary?.total || 0).toFixed(2)}/10</span>
+            <span>${parseFloat(data.summary?.total || 0).toFixed(1)}/100</span>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
-            <div class="bg-blue-600 h-2 rounded-full" style="width: ${(data.summary?.total || 0) * 10}%"></div>
+            <div class="bg-blue-600 h-2 rounded-full" style="width: ${data.summary?.total || 0}%"></div>
           </div>
         </div>
       `;

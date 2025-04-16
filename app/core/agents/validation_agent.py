@@ -1,50 +1,31 @@
-"""Validation agent for checking code submission tech stack compliance.
-
-This module defines the ValidationAgent class, which validates that a code submission
-(in ZIP format) matches the expected tech stack using file extensions and LLM analysis.
-"""
-
 from typing import Dict, List
 from app.core.processors.zip_processor import ZipProcessor
 from app.core.llm.manager import LLMManager
-import os
 import logging
 import zipfile
+import json
+import yaml
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 class ValidationAgent:
-    """Validates code submissions against a specified tech stack.
+    """Validates code submissions against a specified tech stack."""
 
-    Attributes:
-        tech_stack: List of normalized language names (e.g., 'Python', 'JavaScript').
-        llm: LLMManager instance for potential LLM-based validation.
-    """
     def __init__(self, tech_stack, model_name, model_backend):
-        """Initialize ValidationAgent with tech stack and LLM configuration.
-
-        Args:
-            tech_stack: List of expected languages.
-            model_name: Name of the LLM model.
-            model_backend: Backend for LLM (e.g., 'bedrock').
-        """
+        """Initialize ValidationAgent."""
         self.tech_stack = [self._normalize_language(lang.strip()) for lang in tech_stack if self._normalize_language(lang.strip())]
         self.llm = LLMManager(model_name=model_name, model_backend=model_backend)
-        logger.debug(f"ValidationAgent initialized with tech_stack={self.tech_stack}, model_name={model_name}, model_backend={model_backend}")
+        try:
+            with open("config/models.yaml", "r") as f:
+                self.prompts = yaml.safe_load(f).get("prompts", {})
+        except Exception as e:
+            logger.error(f"Failed to load prompts: {str(e)}")
+            self.prompts = {}
+        logger.debug(f"ValidationAgent initialized with tech_stack={self.tech_stack}, model_name={model_name}")
 
     def _normalize_language(self, lang: str) -> str:
-        """Normalize language names to standard format.
-
-        Args:
-            lang: Raw language name (e.g., 'python', 'node.js').
-
-        Returns:
-            str: Normalized name (e.g., 'Python', 'JavaScript') or empty string if invalid.
-
-        Example:
-            >>> agent._normalize_language('node.js')
-            'JavaScript'
-        """
+        """Normalize language names."""
         lang_map = {
             "python": "Python",
             "typescript": "TypeScript",
@@ -60,29 +41,41 @@ class ValidationAgent:
         logger.debug(f"Normalized '{lang}' to '{normalized}'")
         return normalized
 
-    def validate_submission(self, zip_path: str) -> Dict:
-        """Validate code submission against tech stack.
+    async def _llm_validate(self, detected_languages: List[str], files: List[str]) -> List[str]:
+        """Use LLM to validate languages."""
+        system_prompt = self.prompts.get("validation", {}).get("system", "You are a code analysis expert. Return JSON only: [\"language\", ...].")
+        user_prompt = self.prompts.get("validation", {}).get("user", "").format(
+            file_list=", ".join(files[:5]),
+            detected_languages=", ".join(detected_languages)
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        try:
+            logger.debug(f"Using model {self.llm.model_name} for validation: prompt={json.dumps(messages)[:200]}...")
+            response = await self.llm.generate(messages)
+            logger.debug(f"Using model {self.llm.model_name} for validation: response={response[:200]}...")
+            return json.loads(response) if response else detected_languages
+        except Exception as e:
+            logger.error(f"LLM validation failed: {str(e)}")
+            return detected_languages
 
-        Args:
-            zip_path: Path to code ZIP file.
-
-        Returns:
-            dict: Validation result with validity, reason, and detected languages.
-
-        Example:
-            {
-                "valid": True,
-                "reason": None,
-                "languages": ["Python", "JavaScript"]
-            }
-        """
+    async def validate_submission(self, zip_path: str) -> Dict:
+        """Validate code submission."""
         try:
             logger.debug(f"Validating zip: {zip_path}")
             zip_processor = ZipProcessor(zip_path)
             detected_languages = zip_processor.extract_languages()
-            logger.debug(f"Files in {zip_path}: {[name for name in zipfile.ZipFile(zip_path).namelist() if name.endswith(('.py', '.ts', '.js', '.tsx', '.jsx', '.html'))]}")
+            with zipfile.ZipFile(zip_path) as z:
+                files = [name for name in z.namelist() if name.endswith(('.py', '.ts', '.js', '.tsx', '.jsx', '.html'))]
+            logger.debug(f"Files in {zip_path}: {files}")
             logger.debug(f"Detected languages: {list(detected_languages)}")
             logger.debug(f"Expected tech stack: {self.tech_stack}")
+
+            if len(detected_languages) > len(self.tech_stack):
+                detected_languages = await self._llm_validate(detected_languages, files)
+
             if not self.tech_stack:
                 logger.warning("No valid tech stack provided; assuming validation passes")
                 return {
