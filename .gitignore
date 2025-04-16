@@ -6,3 +6,8 @@ __pycache__/
 server_log.txt
 cli_log.txt
 cli_debug.log
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
