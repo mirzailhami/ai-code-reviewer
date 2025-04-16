@@ -1,10 +1,3 @@
-"""Master agent for orchestrating code review in AI Code Reviewer.
-
-This module defines the MasterAgent class, which coordinates validation, SonarQube parsing,
-code extraction, and LLM-based analysis to produce a comprehensive code review report.
-It integrates with AWS Bedrock for quality, security, and performance evaluations.
-"""
-
 from typing import Dict, Any, List
 from app.core.agents.validation_agent import ValidationAgent
 from app.core.agents.nlp_question_agent import NLPQuestionAgent
@@ -28,7 +21,7 @@ class MasterAgent:
         "security": "mistral_large",
         "quality": "deepseek_r1",
         "performance": "llama3_70b",
-        "scorecard": "mistral_large"
+        "scorecard": "llama3_70b"
     }
 
     def __init__(self, model_name: str, model_backend: str, tech_stack: List[str] = None):
@@ -71,11 +64,14 @@ class MasterAgent:
         self.splitter = ChunkSplitter(chunk_size=200)
 
         if self.is_parallel:
-            self.llms = {
-                task: LLMManager(model_name, self.model_backend)
-                for task, model_name in self.MODEL_TASK_MAPPING.items()
-                if task in ["security", "quality", "performance"]
-            }
+            self.llms = {}
+            for task, model_name in self.MODEL_TASK_MAPPING.items():
+                if task in ["security", "quality", "performance"]:
+                    try:
+                        self.llms[task] = LLMManager(model_name, self.model_backend)
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize {model_name} for {task}: {e}, falling back to mistral_large")
+                        self.llms[task] = LLMManager("mistral_large", self.model_backend)
         else:
             self.llms = {
                 task: LLMManager(self.model_name, self.model_backend)
@@ -107,7 +103,7 @@ class MasterAgent:
                     "quality_metrics": {"maintainability_score": 0, "code_smells": 0, "doc_coverage": 0},
                     "performance_metrics": {"rating": 0, "bottlenecks": [], "optimization_suggestions": []},
                     "scorecard": [],
-                    "summary": {"code_quality": 0, "security": 0, "performance": 0, "total": 0.0},
+                    "summary": {"code_quality": 0, "security": 0, "performance": 0, "scorecard": 0, "total": 0.0},
                     "timestamp": datetime.now().isoformat()
                 }
 
@@ -136,7 +132,7 @@ class MasterAgent:
                 "quality_metrics": quality if isinstance(quality, dict) else {"maintainability_score": 50, "code_smells": len(sonar_data["issues"]), "doc_coverage": doc_coverage},
                 "performance_metrics": performance if isinstance(performance, dict) else {"rating": 60, "bottlenecks": [], "optimization_suggestions": []},
                 "scorecard": [],
-                "summary": {"code_quality": 50, "security": 100, "performance": 60, "total": 0.0},
+                "summary": {"code_quality": 50, "security": 100, "performance": 60, "scorecard": 0, "total": 0.0},
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -148,6 +144,12 @@ class MasterAgent:
                     with open(spec_path, "r", encoding="utf-8") as f:
                         spec = f.read()
                     results["scorecard"] = await self.nlp_agent.process_questions(question_file, sonar_data, code_chunks, spec)
+                    logger.info(f"Processed {len(results['scorecard'])} scorecard answers")
+                    # Fallback to mistral_large if no valid answers
+                    if not any(a.get("answer") not in ["Evaluation not available", "No valid answers generated"] for a in results["scorecard"]):
+                        logger.warning("No valid scorecard answers with llama3_70b, retrying with mistral_large")
+                        self.nlp_agent = NLPQuestionAgent(model_name="mistral_large", model_backend=self.model_backend)
+                        results["scorecard"] = await self.nlp_agent.process_questions(question_file, sonar_data, code_chunks, spec)
                 except Exception as e:
                     logger.error(f"Scorecard failed: {str(e)}")
                     results["scorecard"] = [
@@ -161,14 +163,20 @@ class MasterAgent:
                     ]
 
             security_score = 100 - (len(results["security_findings"]) * 20)
+            scorecard_answers = [
+                a for a in results["scorecard"]
+                if a.get("answer") not in ["Evaluation not available", "No valid answers generated"]
+            ]
             scorecard_score = (
-                sum(a["confidence"] * a["weight"] / 100 for a in results["scorecard"] if "confidence" in a and "weight" in a)
-                / max(1, sum(a["weight"] / 100 for a in results["scorecard"] if "weight" in a))
-            ) if results["scorecard"] else 0
+                sum(a["confidence"] * a["weight"] for a in scorecard_answers if "confidence" in a and "weight" in a)
+                / max(1, sum(a["weight"] for a in scorecard_answers if "weight" in a))
+                * 20  # Normalize to 0-100
+            ) if scorecard_answers else 0
             results["summary"] = {
                 "code_quality": max(100 - len(sonar_data["issues"]) * 10, 50),
                 "security": max(security_score, 0),
                 "performance": results["performance_metrics"].get("rating", 60),
+                "scorecard": round(scorecard_score, 1),
                 "total": round(
                     results["quality_metrics"].get("maintainability_score", 50) * 0.4 +
                     max(security_score, 0) * 0.2 +
@@ -177,7 +185,7 @@ class MasterAgent:
                 )
             }
 
-            logger.info(f"Review completed: total_score={results['summary']['total']}")
+            logger.info(f"Review completed: total_score={results['summary']['total']}, scorecard_score={results['summary']['scorecard']}, answered_questions={len(scorecard_answers)}")
             return results
         except Exception as e:
             logger.error(f"Review failed: {str(e)}")
@@ -187,7 +195,7 @@ class MasterAgent:
                 "quality_metrics": {"maintainability_score": 0, "code_smells": 0, "doc_coverage": 0},
                 "performance_metrics": {"rating": 0, "bottlenecks": [], "optimization_suggestions": []},
                 "scorecard": [],
-                "summary": {"code_quality": 0, "security": 0, "performance": 0, "total": 0.0},
+                "summary": {"code_quality": 0, "security": 0, "performance": 0, "scorecard": 0, "total": 0.0},
                 "timestamp": datetime.now().isoformat()
             }
 

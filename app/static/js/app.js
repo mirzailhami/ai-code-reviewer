@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const screeningResults = document.getElementById('screeningResults');
   const securityFindings = document.getElementById('securityFindings');
   const qualityMetrics = document.getElementById('qualityMetrics');
+  const performanceMetrics = document.getElementById('performanceMetrics');
   const scorecard = document.getElementById('scorecard');
   const nlpResults = document.getElementById('nlpResults');
   const analyzeBtn = document.getElementById('analyzeBtn');
@@ -15,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Disable button and show loading state
     analyzeBtn.disabled = true;
-    btnText.textContent = 'Let we work, please wait ...';
+    btnText.textContent = 'Let we work, please wait...';
 
     const formData = new FormData(form);
     console.log('FormData:', Object.fromEntries(formData));
@@ -35,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.error) {
         resultsContainer.innerHTML = `
           <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
- grievances            <strong>Error:</strong> ${data.error}
+            <strong>Error:</strong> ${data.error}
           </div>
           <div class="bg-white p-6 rounded-lg shadow mt-6">
             <h3 class="text-lg font-semibold mb-2 text-gray-700">Screening Results</h3>
@@ -127,7 +128,19 @@ document.addEventListener('DOMContentLoaded', () => {
         <p><strong>Documentation Coverage:</strong> ${data.quality_metrics?.doc_coverage || 0}/100</p>
       `;
 
+      // Performance Metrics
+      performanceMetrics.innerHTML = `
+        <h3 class="text-lg font-semibold mb-2 text-gray-700">Performance Metrics</h3>
+        <p><strong>Rating:</strong> ${data.performance_metrics?.rating || 0}/100</p>
+        <p><strong>Bottlenecks:</strong> ${data.performance_metrics?.bottlenecks?.length ? data.performance_metrics.bottlenecks.join(', ') : 'None'}</p>
+        <p><strong>Optimization Suggestions:</strong> ${data.performance_metrics?.optimization_suggestions?.length ? data.performance_metrics.optimization_suggestions.join(', ') : 'None'}</p>
+      `;
+
       // Score Summary
+      const scorecardScore = data.scorecard?.length
+        ? data.scorecard.reduce((sum, r) => sum + (r.confidence * r.weight), 0) /
+          data.scorecard.reduce((sum, r) => sum + r.weight, 0) * 20 // Normalize to 0-100
+        : 0;
       scorecard.innerHTML = `
         <h3 class="text-lg font-semibold mb-2 text-gray-700">Score Summary</h3>
         <div class="mb-3">
@@ -155,6 +168,15 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
             <div class="bg-blue-600 h-2 rounded-full" style="width: ${data.summary?.performance || 0}%"></div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <div class="flex justify-between text-sm mb-1">
+            <span>Scorecard</span>
+            <span>${Math.round(scorecardScore)}/100</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2">
+            <div class="bg-blue-600 h-2 rounded-full" style="width: ${scorecardScore}%"></div>
           </div>
         </div>
         <div class="mb-3">

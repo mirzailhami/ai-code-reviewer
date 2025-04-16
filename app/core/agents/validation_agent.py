@@ -83,6 +83,7 @@ class ValidationAgent:
                     "reason": None,
                     "languages": list(detected_languages)
                 }
+
             matching_languages = set(self.tech_stack).intersection(detected_languages)
             logger.debug(f"Matching languages: {list(matching_languages)}")
             if not matching_languages:
@@ -93,6 +94,8 @@ class ValidationAgent:
                     "reason": f"No matching languages found in code: {', '.join(missing)}",
                     "languages": list(detected_languages)
                 }
+
+            # Include all detected languages, not just matches
             logger.info(f"Validation passed with matching languages: {', '.join(matching_languages)}")
             return {
                 "valid": True,

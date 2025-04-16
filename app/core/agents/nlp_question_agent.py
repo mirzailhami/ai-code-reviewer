@@ -17,7 +17,7 @@ class NLPQuestionAgent:
         self.model_name = model_name
         self.model_backend = model_backend
         self.llm = LLMManager(model_name=model_name, model_backend=model_backend)
-        self.semaphore = Semaphore(1)
+        self.semaphore = Semaphore(4)  # Allow 2 concurrent questions
         try:
             with open("config/models.yaml", "r") as f:
                 self.prompts = yaml.safe_load(f).get("prompts", {})
@@ -42,67 +42,83 @@ class NLPQuestionAgent:
                 "weight": weight
             }
 
-            try:
-                user_prompt_template = self.prompts.get("scorecard", {}).get("user", "")
-                if not user_prompt_template:
-                    logger.error("scorecard user prompt not found")
-                    return default_result
-
-                format_args = {
-                    "sonar_data": json.dumps(sonar_data, indent=2)[:500],
-                    "code_samples": json.dumps(code_chunks[:2], indent=2)[:1000],
-                    "spec": spec[:500],
-                    "docs": docs[:1000],
-                    "question": question_text,
-                    "category": category,
-                    "weight": weight
-                }
-                user_content = user_prompt_template.format(**format_args)
-
-                prompt = [
-                    {"role": "system", "content": self.prompts.get("scorecard", {}).get("system", "")},
-                    {"role": "user", "content": user_content}
-                ]
-
-                logger.debug(f"Using model {self.model_name} for scorecard question '{question_text[:50]}': prompt={json.dumps(prompt)[:200]}...")
-                response = await self.llm.generate(prompt)
-                logger.debug(f"Using model {self.model_name} for scorecard question '{question_text[:50]}': response={response[:200]}...")
-
-                if not response:
-                    logger.warning(f"Empty response for question: {question_text}")
-                    return default_result
-
+            for attempt in range(4):  # Increased retries
                 try:
-                    json_str = response.strip()
-                    if json_str.startswith("```json"):
-                        json_str = json_str[7:].rsplit("```", 1)[0].strip()
-                    result = json.loads(json_str)
-                    if not isinstance(result, list) or not result:
-                        logger.warning(f"Invalid response format: {json_str[:100]}")
+                    user_prompt_template = self.prompts.get("scorecard", {}).get("user", "")
+                    if not user_prompt_template:
+                        logger.error("scorecard user prompt not found")
                         return default_result
 
-                    answer_data = result[0]
-                    answer = str(answer_data.get("answer", ""))[:200]
-                    confidence = answer_data.get("confidence", 1)
-                    confidence = min(max(int(confidence), 1), 5)
-
-                    return {
+                    format_args = {
+                        "sonar_data": json.dumps(sonar_data, indent=2)[:500],
+                        "code_samples": json.dumps(code_chunks[:2], indent=2)[:1000],
+                        "spec": spec[:500],
+                        "docs": docs[:1000],
                         "question": question_text,
                         "category": category,
-                        "answer": answer or "No answer provided",
-                        "confidence": confidence,
                         "weight": weight
                     }
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to parse JSON: {json_str[:100]}... Error: {str(e)}")
-                    return default_result
-                except Exception as e:
-                    logger.error(f"Response processing error: {str(e)}")
-                    return default_result
+                    user_content = user_prompt_template.format(**format_args)
 
-            except Exception as e:
-                logger.error(f"Question processing error: {str(e)}")
-                return default_result
+                    prompt = [
+                        {"role": "system", "content": self.prompts.get("scorecard", {}).get("system", "")},
+                        {"role": "user", "content": user_content}
+                    ]
+
+                    logger.debug(f"Attempt {attempt + 1} for '{question_text[:50]}': prompt={json.dumps(prompt)[:200]}...")
+                    response = await self.llm.generate(prompt)
+                    logger.debug(f"Attempt {attempt + 1} for '{question_text[:50]}': response={response[:200]}...")
+
+                    if not response:
+                        logger.warning(f"Empty response on attempt {attempt + 1} for: {question_text}")
+                        if attempt < 3:
+                            await asyncio.sleep(4)
+                            continue
+                        return default_result
+
+                    try:
+                        json_str = response.strip()
+                        if json_str.startswith("```json"):
+                            json_str = json_str[7:].rsplit("```", 1)[0].strip()
+                        result = json.loads(json_str)
+                        if not isinstance(result, list) or not result or len(result) != 1:
+                            logger.warning(f"Invalid format on attempt {attempt + 1}: {json_str[:100]}")
+                            if attempt < 3:
+                                await asyncio.sleep(4)
+                                continue
+                            return default_result
+
+                        answer_data = result[0]
+                        answer = str(answer_data.get("answer", ""))[:200]
+                        confidence = answer_data.get("confidence", 1)
+                        confidence = min(max(int(confidence), 1), 5)
+
+                        return {
+                            "question": question_text,
+                            "category": category,
+                            "answer": answer or "No answer provided",
+                            "confidence": confidence,
+                            "weight": weight
+                        }
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"JSON parse failed on attempt {attempt + 1}: {json_str[:100]}... Error: {e}")
+                        if attempt < 3:
+                            await asyncio.sleep(4)
+                            continue
+                        return default_result
+                    except Exception as e:
+                        logger.error(f"Response processing error on attempt {attempt + 1}: {e}")
+                        if attempt < 3:
+                            await asyncio.sleep(4)
+                            continue
+                        return default_result
+
+                except Exception as e:
+                    logger.error(f"Question processing error on attempt {attempt + 1}: {e}")
+                    if attempt < 3:
+                        await asyncio.sleep(4)
+                        continue
+                    return default_result
 
     async def process_questions(self, question_file: str, sonar_data: Dict, code_chunks: List[Dict], spec: str) -> List[Dict]:
         """Process multiple scorecard questions."""
@@ -111,7 +127,7 @@ class NLPQuestionAgent:
             with open(question_file, "r", encoding="utf-8") as f:
                 questions = json.load(f)
             questions = questions if isinstance(questions, list) else questions.get("questions", [])
-            logger.debug(f"Loaded {len(questions)} questions")
+            logger.info(f"Loaded {len(questions)} questions")
         except Exception as e:
             logger.error(f"Failed to load questions: {str(e)}")
             return [
@@ -134,7 +150,9 @@ class NLPQuestionAgent:
         except Exception as e:
             logger.warning(f"Failed to load docs: {str(e)}")
 
-        tasks = [self.process_question(q, sonar_data, code_chunks, spec, docs) for q in questions]
+        tasks = []
+        for q in questions:
+            tasks.append(self.process_question(q, sonar_data, code_chunks, spec, docs))
         answers = await asyncio.gather(*tasks, return_exceptions=True)
 
         valid_answers = [
@@ -142,12 +160,16 @@ class NLPQuestionAgent:
             if isinstance(answer, dict)
             and answer.get("answer") not in ["Evaluation not available", "Failed to load questions"]
         ]
-        return valid_answers or [
-            {
-                "question": "None",
-                "category": "",
-                "answer": "No valid answers generated",
-                "confidence": 1,
-                "weight": 0
-            }
-        ]
+        logger.info(f"Generated {len(valid_answers)} valid answers")
+        if not valid_answers:
+            logger.warning("No valid scorecard answers generated")
+            return [
+                {
+                    "question": "None",
+                    "category": "",
+                    "answer": "No valid answers generated",
+                    "confidence": 1,
+                    "weight": 0
+                }
+            ]
+        return valid_answers
