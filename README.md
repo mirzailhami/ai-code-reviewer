@@ -28,7 +28,7 @@ The system uses AWS Bedrock models, configured for parallel processing:
 
 Model settings are defined in `config/models.yaml`:
 
-\`\`\`yaml
+```
 backends:
   bedrock:
     enabled: true
@@ -79,7 +79,7 @@ prompts:
       - SonarQube data: {sonar_data}
       - Code samples: {code_samples}
       Return JSON only: {\"rating\": number, \"bottlenecks\": [], \"optimization_suggestions\": []}.
-\`\`\`
+```
 
 - **backends**: Configures Bedrock models and parameters.
 - **prompts**: Defines AI prompts for evaluation tasks.
