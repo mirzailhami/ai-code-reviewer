@@ -1,10 +1,8 @@
 name: Deploy to AWS Elastic Beanstalk
-
 on:
   push:
     branches:
       - main
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -25,10 +23,13 @@ jobs:
           aws-access-key-id: \${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: \${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+      - name: Verify AWS credentials
+        run: |
+          aws sts get-caller-identity || { echo "AWS credentials invalid"; exit 1; }
       - name: Install EB CLI
         run: pip install awsebcli
       - name: Deploy to Elastic Beanstalk
         run: |
           eb init ai-code-reviewer -p python-3.9 --region us-east-1
           eb use ai-code-reviewer-env
-          eb deploy ai-code-reviewer-env
+          eb deploy ai-code-reviewer-env --verbose
