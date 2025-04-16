@@ -92,7 +92,7 @@ prompts:
 | `/`                | GET    | Serves web UI                  | N/A                                                                                          | HTML (`index.html`)                                     |
 | `/api/health`      | GET    | Checks app health              | N/A                                                                                          | `{"status": "healthy"}`                                 |
 | `/api/models`      | GET    | Lists available models         | N/A                                                                                          | `{"bedrock": ["mistral_large", "llama3_70b", "deepseek_r1"]}` |
-| `/api/analyze`     | POST   | Analyzes uploaded files        | `sonar_report`, `code_zip`, `challenge_spec`, `tech_stack: "Python,TypeScript"`, `scorecard`, `model_backend: "bedrock"`, `model_name: "parallel"` | `{"valid": true, "code_quality": 50}`                   |
+| `/api/analyze`     | POST   | Analyzes uploaded files        | `sonar_report`, `submission`, `challenge_spec`, `tech_stack: "Python,TypeScript"`, `scorecard`, `model_backend: "bedrock"`, `model_name: "parallel"` | `{"valid": true, "code_quality": 50}`                   |
 | `/api/test-bedrock`| GET    | Tests Bedrock connectivity     | N/A                                                                                          | `{"status": "success", "models": [...]}`                |
 
 ## Input File Structures
@@ -205,14 +205,12 @@ The system processes the following inputs:
 
 2. **Installation**:
    ```
-   python3 -m venv venv
-   source venv/bin/activate
    pip install -r requirements.txt
    ```
 
 3. **Run CLI**:
    ```
-   python app/cli.py \\
+   time python app/cli.py \\
      --sonar-file tests/test_data/sonar-report.json \\
      --zip-path tests/test_data/submission.zip \\
      --spec-path tests/test_data/spec.txt \\
@@ -235,60 +233,13 @@ Deploy to AWS EB for a live demo:
    - EB CLI (`pip install awsebcli`)
    - Git initialized
 
-2. **Configuration**:
-   - `requirements.txt`:
-     ```
-     fastapi==0.115.0
-     uvicorn==0.30.6
-     python-multipart==0.0.9
-     jinja2==3.1.4
-     boto3==1.35.29
-     pyyaml==6.0.2
-     aiohttp==3.10.5
-     click==8.1.7
-     backoff==2.2.1
-     gunicorn==23.0.0
-     ```
-   - `.ebextensions/options.config`:
-     ```yaml
-     option_settings:
-       aws:elasticbeanstalk:container:python:
-         WSGIPath: app.main:app
-       aws:elasticbeanstalk:environment:process:default:
-         Port: 8000
-         Protocol: HTTP
-     ```
-   - `.ebextensions/healthcheck.config`:
-     ```yaml
-     option_settings:
-       aws:elasticbeanstalk:application:
-         Application Healthcheck URL: /api/health
-     ```
-   - `.platform/hooks/predeploy/01_setup_gunicorn.sh`:
-     ```
-     #!/bin/bash
-     source /var/app/venv/*/bin/activate
-     pip install uvicorn==0.30.6 gunicorn==23.0.0
-     cat << GUNICORN_CONF > /var/app/staging/gunicorn.conf.py
-     bind = '0.0.0.0:8000'
-     workers = 2
-     worker_class = 'uvicorn.workers.UvicornWorker'
-     timeout = 60
-     keepalive = 2
-     GUNICORN_CONF
-     ```
-   - `.platform/nginx/conf.d/custom.conf`:
-     ```
-     client_max_body_size 50M;
-     ```
-
-3. **Initialize EB**:
+2. **Initialize EB**:
    ```
    eb init -p python-3.9 ai-code-reviewer --region us-east-1
    eb create ai-code-reviewer-env --single
    ```
 
-4. **Set IAM Role**:
+3. **Set IAM Role**:
    - Create `aws-elasticbeanstalk-ec2-role` with `AmazonBedrockFullAccess`.
    - Attach to EB:
      ```
@@ -297,7 +248,7 @@ Deploy to AWS EB for a live demo:
        --option-settings Namespace=aws:autoscaling:launchconfiguration,OptionName=IamInstanceProfile,Value=aws-elasticbeanstalk-ec2-role
      ```
 
-5. **Deploy**:
+4. **Deploy**:
    ```
    git add .
    git commit -m "Deploy to EB"
@@ -400,7 +351,3 @@ See `requirements.txt`. Key packages:
 
 - **Python**: Local 3.13+; EB uses 3.9.
 - **Security**: IAM role `aws-elasticbeanstalk-ec2-role` with `AmazonBedrockFullAccess`.
-- **Improvements**:
-  - Add TypeScript/Python files with comments to `submission.zip` for `doc_coverage`.
-  - Re-add logging to `main.py` for better debugging.
-  - Test `/api/test-bedrock` on EB to confirm Bedrock access.
