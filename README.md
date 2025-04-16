@@ -217,6 +217,7 @@ The system processes the following inputs:
      --question-file tests/test_data/scorecard.json \\
      --tech-stack "TypeScript, Python"
    ```
+   Output file: `report.json`
 
 4. **Run Web**:
    ```
