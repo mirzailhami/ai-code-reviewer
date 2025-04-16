@@ -26,6 +26,10 @@ except FileNotFoundError:
 async def get_form(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 @app.get("/api/models")
 async def get_models():
     try:
