@@ -25,6 +25,7 @@ prompts:
       - Code samples: {code_samples}
       - Specification: {spec}
       - Questions: {questions}
+      Provide a concise answer (up to 200 chars) addressing the question.
       Return JSON only: [{\"answer\": \"string\", \"confidence\": 1-5}].
       Do not include prose, explanations, markdown, or code blocks.
   security:
