@@ -166,8 +166,7 @@ The system processes the following inputs:
 5. **Submission** (`submission.zip`):
    - ZIP file with source code (e.g., `.py`, `.ts`, `README.md`).
    - Processed by `zip_processor.py`.
-   - Example: `tests/test_data/submission.zip` with `sample.ts`, `README.md`.
-   - **Tip for doc_coverage: 0**: Include a detailed `README.md` and code comments in `.ts` or `.py` files.
+   - Example: `tests/test_data/submission.zip`.
 
 ## Setup & Execution (Local)
 
