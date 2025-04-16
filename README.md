@@ -210,12 +210,12 @@ The system processes the following inputs:
 
 3. **Run CLI**:
    ```
-   time python app/cli.py \\
-     --sonar-file tests/test_data/sonar-report.json \\
-     --zip-path tests/test_data/submission.zip \\
-     --spec-path tests/test_data/spec.txt \\
-     --question-file tests/test_data/scorecard.json \\
-     --tech-stack "TypeScript, Python"
+   time python app/cli.py \
+    --sonar-file tests/test_data/sonar-report.json \
+    --zip-path tests/test_data/submission.zip \
+    --spec-path tests/test_data/spec.txt \
+    --question-file tests/test_data/scorecard.json \
+    --tech-stack "TypeScript, Python" | tee cli_log.txt
    ```
    Output file: `report.json`
 
@@ -349,6 +349,15 @@ See `requirements.txt`. Key packages:
 - `pyyaml==6.0.2`: Config parsing
 
 ## Notes
+- To generate sonar-report.json:
+```
+sonar-scanner \
+  -Dsonar.projectKey=ai-code-reviewer \
+  -Dsonar.sources=. \
+  -Dsonar.exclusions="tests/*,venv/*,*.git*,*__pycache__*" \
+  -Dsonar.python.version=3.13 \
+  -Dsonar.report.export.path=sonar-report.json \
+  -Dsonar.token=YOUR_TOKEN_HERE
+```
 
-- **Python**: Local 3.13+; EB uses 3.9.
-- **Security**: IAM role `aws-elasticbeanstalk-ec2-role` with `AmazonBedrockFullAccess`.
+- Get the report from `http://localhost:9000/api/issues/search?componentKeys=ai-code-reviewer&resolved=false`

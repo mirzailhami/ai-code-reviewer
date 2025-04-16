@@ -1,3 +1,9 @@
+"""NLP question agent for evaluating code submission questions.
+
+This module defines the NLPQuestionAgent class, which processes scorecard questions
+using LLM to generate answers based on SonarQube data, code samples, and specifications.
+"""
+
 from typing import List, Dict, Any
 from app.core.llm.manager import LLMManager
 import json
@@ -10,7 +16,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 class NLPQuestionAgent:
+    """Processes scorecard questions with NLP for code evaluation.
+
+    Attributes:
+        model_name: Name of the LLM model.
+        model_backend: Backend for LLM (e.g., 'bedrock').
+        llm: LLMManager instance for generation.
+        semaphore: Asyncio semaphore to limit concurrent LLM calls.
+        prompts: Loaded prompt templates from models.yaml.
+    """
     def __init__(self, model_name: str, model_backend: str):
+        """Initialize NLPQuestionAgent with model configuration.
+
+        Args:
+            model_name: Name of the LLM model.
+            model_backend: Backend for LLM (e.g., 'bedrock').
+
+        Raises:
+            FileNotFoundError: If models.yaml is missing.
+            yaml.YAMLError: If models.yaml is invalid.
+        """
         self.model_name = model_name
         self.model_backend = model_backend
         self.llm = LLMManager(model_name="mistral_large", model_backend=model_backend)
@@ -37,6 +62,26 @@ class NLPQuestionAgent:
             }
 
     async def process_question(self, q: Dict, sonar_data: Dict, code_chunks: List[Dict], spec: str) -> Dict:
+        """Process a single scorecard question with NLP.
+
+        Args:
+            q: Question dictionary with 'question', 'category', and 'weight'.
+            sonar_data: Parsed SonarQube data.
+            code_chunks: List of code file chunks.
+            spec: Challenge specification text.
+
+        Returns:
+            dict: Answer with question, category, answer, confidence, and weight.
+
+        Example:
+            {
+                "question": "Is the code maintainable?",
+                "category": "Quality",
+                "answer": "Code has issues but is maintainable.",
+                "confidence": 4,
+                "weight": 20.0
+            }
+        """
         async with self.semaphore:
             question_text = q.get('question', 'Unknown')
             logger.debug(f"Processing question: {question_text[:50]}...")
@@ -203,8 +248,8 @@ class NLPQuestionAgent:
                 answer = {
                     "question": question_text,
                     "category": q.get("category", ""),
-                    "answer": result.get("answer", "Unable to process")[:200],  # Increased limit
-                    "confidence": min(max(int(result.get("confidence", 2)), 1), 5),
+                    "answer": result.get("answer", "Unable to process")[:200],
+                    "confidence": min(max(int(result.get("confidence", 2) or 2), 1), 5),
                     "weight": q.get("weight", 0)
                 }
                 logger.debug(f"Generated answer: {answer}")
@@ -215,6 +260,29 @@ class NLPQuestionAgent:
                 return default_result
 
     async def process_questions(self, question_file: str, sonar_data: Dict, code_chunks: List[Dict], spec: str) -> List[Dict]:
+        """Process multiple scorecard questions with NLP.
+
+        Args:
+            question_file: Path to scorecard JSON file.
+            sonar_data: Parsed SonarQube data.
+            code_chunks: List of code file chunks.
+            spec: Challenge specification text.
+
+        Returns:
+            list: List of answers with question, category, answer, confidence, and weight.
+
+        Example:
+            [
+                {
+                    "question": "Is the code maintainable?",
+                    "category": "Quality",
+                    "answer": "Code has issues but is maintainable.",
+                    "confidence": 4,
+                    "weight": 20.0
+                },
+                ...
+            ]
+        """
         logger.debug(f"Processing questions with model_name={self.model_name}, question_file={question_file}")
         try:
             with open(question_file, "r") as f:

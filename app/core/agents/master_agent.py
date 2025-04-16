@@ -1,3 +1,10 @@
+"""Master agent for orchestrating code review in AI Code Reviewer.
+
+This module defines the MasterAgent class, which coordinates validation, SonarQube parsing,
+code extraction, and LLM-based analysis to produce a comprehensive code review report.
+It integrates with AWS Bedrock for quality, security, and performance evaluations.
+"""
+
 from typing import Dict, Any, List
 from app.core.agents.validation_agent import ValidationAgent
 from app.core.agents.nlp_question_agent import NLPQuestionAgent
@@ -15,11 +22,35 @@ import logging
 logger = logging.getLogger(__name__)
 
 class MasterAgent:
-    def __init__(self, model_name: str, model_backend: str, tech_stack: List[str] = []):
+    """Orchestrates code review using validation, SonarQube, and NLP agents.
+
+    Attributes:
+        model_name: Name of the LLM model (e.g., 'parallel').
+        model_backend: Backend for LLM (e.g., 'bedrock').
+        tech_stack: List of supported languages.
+        validation_agent: Agent for tech stack validation.
+        nlp_agent: Agent for processing scorecard questions.
+        parser: Parser for SonarQube reports.
+        zip_processor: Processor for code ZIP files.
+        splitter: Splits code into chunks for LLM.
+        prompts: Loaded prompt templates from models.yaml.
+    """
+    def __init__(self, model_name: str, model_backend: str, tech_stack: List[str] = None):
+        """Initialize MasterAgent with model and tech stack configurations.
+
+        Args:
+            model_name: Name of the LLM model.
+            model_backend: Backend for LLM (e.g., 'bedrock').
+            tech_stack: List of supported languages (default: None).
+
+        Raises:
+            FileNotFoundError: If models.yaml is missing.
+            yaml.YAMLError: If models.yaml is invalid.
+        """
         self.model_name = model_name
         self.model_backend = model_backend
-        self.tech_stack = tech_stack
-        self.validation_agent = ValidationAgent(tech_stack=tech_stack, model_name="mistral_large", model_backend=model_backend)
+        self.tech_stack = tech_stack if tech_stack is not None else []
+        self.validation_agent = ValidationAgent(tech_stack=self.tech_stack, model_name="mistral_large", model_backend=model_backend)
         self.nlp_agent = NLPQuestionAgent("mistral_large", model_backend)
         self.parser = SonarParser()
         self.zip_processor = ZipProcessor(None)
@@ -34,6 +65,28 @@ class MasterAgent:
             self.prompts = {}
 
     async def review_code(self, sonar_file: str, zip_path: str, spec_path: str, question_file: str = None) -> Dict[str, Any]:
+        """Review code submission and generate a comprehensive report.
+
+        Args:
+            sonar_file: Path to SonarQube JSON report.
+            zip_path: Path to code ZIP file.
+            spec_path: Path to challenge specification.
+            question_file: Path to scorecard JSON (optional).
+
+        Returns:
+            dict: Review results including validation, security, quality, performance, and scorecard.
+
+        Raises:
+            Exception: If any analysis step fails.
+
+        Example:
+            {
+                "screening_result": {"valid": true, "languages": ["Python"]},
+                "security_findings": [],
+                "quality_metrics": {"maintainability_score": 50, "doc_coverage": 0},
+                ...
+            }
+        """
         try:
             logger.debug(f"Starting review_code with model_name={self.model_name}, zip_path={zip_path}")
             validation_result = self.validation_agent.validate_submission(zip_path)
@@ -163,6 +216,28 @@ class MasterAgent:
             }
 
     async def analyze_security(self, sonar_data: Dict, code_chunks: List[Dict], llm) -> List[Dict]:
+        """Analyze code for security issues using LLM.
+
+        Args:
+            sonar_data: Parsed SonarQube data.
+            code_chunks: List of code file chunks.
+            llm: LLMManager instance for generation.
+
+        Returns:
+            list: List of security findings in JSON format.
+
+        Example:
+            [
+                {
+                    "issue": "Hardcoded credentials",
+                    "type": "Security",
+                    "severity": "CRITICAL",
+                    "confidence": 4,
+                    "file": "app/main.py",
+                    "recommendation": "Use environment variables."
+                }
+            ]
+        """
         logger.debug(f"Analyzing security with model_name={llm.model_name}")
         messages = [
             {
@@ -197,6 +272,23 @@ class MasterAgent:
             return []
 
     async def analyze_quality(self, sonar_data: Dict, code_chunks: List[Dict], llm) -> Dict:
+        """Analyze code quality using LLM.
+
+        Args:
+            sonar_data: Parsed SonarQube data.
+            code_chunks: List of code file chunks.
+            llm: LLMManager instance for generation.
+
+        Returns:
+            dict: Quality metrics including maintainability and doc coverage.
+
+        Example:
+            {
+                "maintainability_score": 50,
+                "code_smells": 2,
+                "doc_coverage": 0
+            }
+        """
         logger.debug(f"Analyzing quality with model_name={llm.model_name}")
         messages = [
             {
@@ -229,6 +321,23 @@ class MasterAgent:
             return {"maintainability_score": 50, "code_smells": 2, "doc_coverage": 0}
 
     async def analyze_performance(self, sonar_data: Dict, code_chunks: List[Dict], llm) -> Dict:
+        """Analyze code performance using LLM.
+
+        Args:
+            sonar_data: Parsed SonarQube data.
+            code_chunks: List of code file chunks.
+            llm: LLMManager instance for generation.
+
+        Returns:
+            dict: Performance metrics including rating and suggestions.
+
+        Example:
+            {
+                "rating": 60,
+                "bottlenecks": [],
+                "optimization_suggestions": []
+            }
+        """
         logger.debug(f"Analyzing performance with model_name={llm.model_name}")
         messages = [
             {

@@ -6,7 +6,8 @@
   <title>AI Code Reviewer | Topcoder</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="/static/css/styles.css" rel="stylesheet">
-<link rel="icon" href="/static/favicon.ico" type="image/x-icon"></head>
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+</head>
 <body class="bg-gray-50">
   <div class="container mx-auto px-4 py-8">
     <header class="mb-8 text-center">
@@ -50,8 +51,8 @@
           <input type="hidden" name="model_backend" value="bedrock">
           <input type="hidden" name="model_name" value="parallel">
           <button type="submit" id="analyzeBtn"
-            class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
-            Analyze Code
+            class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+            <span id="btnText">Analyze Code</span>
           </button>
         </form>
       </div>

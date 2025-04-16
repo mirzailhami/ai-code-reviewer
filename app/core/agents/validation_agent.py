@@ -1,3 +1,9 @@
+"""Validation agent for checking code submission tech stack compliance.
+
+This module defines the ValidationAgent class, which validates that a code submission
+(in ZIP format) matches the expected tech stack using file extensions and LLM analysis.
+"""
+
 from typing import Dict, List
 from app.core.processors.zip_processor import ZipProcessor
 from app.core.llm.manager import LLMManager
@@ -8,12 +14,37 @@ import zipfile
 logger = logging.getLogger(__name__)
 
 class ValidationAgent:
+    """Validates code submissions against a specified tech stack.
+
+    Attributes:
+        tech_stack: List of normalized language names (e.g., 'Python', 'JavaScript').
+        llm: LLMManager instance for potential LLM-based validation.
+    """
     def __init__(self, tech_stack, model_name, model_backend):
+        """Initialize ValidationAgent with tech stack and LLM configuration.
+
+        Args:
+            tech_stack: List of expected languages.
+            model_name: Name of the LLM model.
+            model_backend: Backend for LLM (e.g., 'bedrock').
+        """
         self.tech_stack = [self._normalize_language(lang.strip()) for lang in tech_stack if self._normalize_language(lang.strip())]
         self.llm = LLMManager(model_name=model_name, model_backend=model_backend)
         logger.debug(f"ValidationAgent initialized with tech_stack={self.tech_stack}, model_name={model_name}, model_backend={model_backend}")
 
     def _normalize_language(self, lang: str) -> str:
+        """Normalize language names to standard format.
+
+        Args:
+            lang: Raw language name (e.g., 'python', 'node.js').
+
+        Returns:
+            str: Normalized name (e.g., 'Python', 'JavaScript') or empty string if invalid.
+
+        Example:
+            >>> agent._normalize_language('node.js')
+            'JavaScript'
+        """
         lang_map = {
             "python": "Python",
             "typescript": "TypeScript",
@@ -30,6 +61,21 @@ class ValidationAgent:
         return normalized
 
     def validate_submission(self, zip_path: str) -> Dict:
+        """Validate code submission against tech stack.
+
+        Args:
+            zip_path: Path to code ZIP file.
+
+        Returns:
+            dict: Validation result with validity, reason, and detected languages.
+
+        Example:
+            {
+                "valid": True,
+                "reason": None,
+                "languages": ["Python", "JavaScript"]
+            }
+        """
         try:
             logger.debug(f"Validating zip: {zip_path}")
             zip_processor = ZipProcessor(zip_path)

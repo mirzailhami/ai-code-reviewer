@@ -7,9 +7,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const qualityMetrics = document.getElementById('qualityMetrics');
   const scorecard = document.getElementById('scorecard');
   const nlpResults = document.getElementById('nlpResults');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const btnText = document.getElementById('btnText');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    // Disable button and show loading state
+    analyzeBtn.disabled = true;
+    btnText.textContent = '... analyzing ...';
+
     const formData = new FormData(form);
     console.log('FormData:', Object.fromEntries(formData));
     resultsContainer.classList.add('hidden');
@@ -122,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Score Summary
       scorecard.innerHTML = `
         <h3 class="text-lg font-semibold mb-2 text-gray-700">Score Summary</h3>
-        <div>
+        <div class="mb-3">
           <div class="flex justify-between text-sm mb-1">
             <span>Code Quality</span>
             <span>${data.summary?.code_quality || 0}/100</span>
@@ -131,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="bg-blue-600 h-2 rounded-full" style="width: ${data.summary?.code_quality || 0}%"></div>
           </div>
         </div>
-        <div>
+        <div class="mb-3">
           <div class="flex justify-between text-sm mb-1">
             <span>Security</span>
             <span>${data.summary?.security || 0}/100</span>
@@ -140,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="bg-blue-600 h-2 rounded-full" style="width: ${data.summary?.security || 0}%"></div>
           </div>
         </div>
-        <div>
+        <div class="mb-3">
           <div class="flex justify-between text-sm mb-1">
             <span>Performance</span>
             <span>${data.summary?.performance || 0}/100</span>
@@ -149,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="bg-blue-600 h-2 rounded-full" style="width: ${data.summary?.performance || 0}%"></div>
           </div>
         </div>
-        <div>
+        <div class="mb-3">
           <div class="flex justify-between text-sm mb-1">
             <span>Total</span>
             <span>${parseFloat(data.summary?.total || 0).toFixed(2)}/10</span>
@@ -168,6 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       resultsContainer.classList.remove('hidden');
       emptyState.classList.add('hidden');
+    } finally {
+      // Re-enable button and restore text
+      analyzeBtn.disabled = false;
+      btnText.textContent = 'Analyze Code';
     }
   });
 });
