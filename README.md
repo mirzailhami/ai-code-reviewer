@@ -100,7 +100,7 @@ prompts:
 The system processes the following inputs:
 
 1. **SonarQube Report** (`sonar-report.json`):
-   \`\`\`json
+   ```
    {
      "total": 2,
      "issues": [
@@ -125,12 +125,12 @@ The system processes the following inputs:
      ],
      "components": []
    }
-   \`\`\`
+   ```
    - Stored in `tests/test_data/sonar-report.json`.
    - Parsed by `app/core/processors/sonar_parser.py`.
 
 2. **Scorecard** (`scorecard.json`):
-   \`\`\`json
+   ```
    [
      {
        "question": "Requirements are implemented completely...",
@@ -148,7 +148,7 @@ The system processes the following inputs:
        "weight": 10.0
      }
    ]
-   \`\`\`
+   ```
    - Stored in `tests/test_data/scorecard.json`.
    - Used by `nlp_question_agent.py`.
 
@@ -157,9 +157,9 @@ The system processes the following inputs:
    - Validated by `validation_agent.py` against `submission.zip`.
 
 4. **Specification** (`spec.txt`):
-   \`\`\`text
+   ```
    The solution must validate code submissions against a specified tech stack and provide a detailed report based on SonarQube analysis. It should support Python and TypeScript, with a web UI and CLI.
-   \`\`\`
+   ```
    - Stored in `tests/test_data/spec.txt`.
    - Guides AI evaluation.
 
@@ -175,7 +175,7 @@ The system processes the following inputs:
    - Python 3.13+ (`python --version`)
    - AWS CLI configured (`aws configure`) with Bedrock access
    - Project structure:
-     \`\`\`
+     ```
      /ai-code-reviewer
       ├── app/
       │   ├── cli.py
@@ -201,29 +201,29 @@ The system processes the following inputs:
       ├── requirements.txt
       ├── .ebextensions/
       ├── .platform/
-     \`\`\`
+     ```
 
 2. **Installation**:
-   \`\`\`bash
+   ```
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
-   \`\`\`
+   ```
 
 3. **Run CLI**:
-   \`\`\`bash
+   ```
    python app/cli.py \\
      --sonar-file tests/test_data/sonar-report.json \\
      --zip-path tests/test_data/submission.zip \\
      --spec-path tests/test_data/spec.txt \\
      --question-file tests/test_data/scorecard.json \\
      --tech-stack "TypeScript, Python"
-   \`\`\`
+   ```
 
 4. **Run Web**:
-   \`\`\`bash
+   ```
    uvicorn app.main:app --host 0.0.0.0 --port 8000
-   \`\`\`
+   ```
    Open `http://localhost:8000`.
 
 ## Deployment (AWS Elastic Beanstalk)
@@ -237,7 +237,7 @@ Deploy to AWS EB for a live demo:
 
 2. **Configuration**:
    - `requirements.txt`:
-     \`\`\`
+     ```
      fastapi==0.115.0
      uvicorn==0.30.6
      python-multipart==0.0.9
@@ -248,24 +248,24 @@ Deploy to AWS EB for a live demo:
      click==8.1.7
      backoff==2.2.1
      gunicorn==23.0.0
-     \`\`\`
+     ```
    - `.ebextensions/options.config`:
-     \`\`\`yaml
+     ```yaml
      option_settings:
        aws:elasticbeanstalk:container:python:
          WSGIPath: app.main:app
        aws:elasticbeanstalk:environment:process:default:
          Port: 8000
          Protocol: HTTP
-     \`\`\`
+     ```
    - `.ebextensions/healthcheck.config`:
-     \`\`\`yaml
+     ```yaml
      option_settings:
        aws:elasticbeanstalk:application:
          Application Healthcheck URL: /api/health
-     \`\`\`
+     ```
    - `.platform/hooks/predeploy/01_setup_gunicorn.sh`:
-     \`\`\`bash
+     ```
      #!/bin/bash
      source /var/app/venv/*/bin/activate
      pip install uvicorn==0.30.6 gunicorn==23.0.0
@@ -276,34 +276,34 @@ Deploy to AWS EB for a live demo:
      timeout = 60
      keepalive = 2
      GUNICORN_CONF
-     \`\`\`
+     ```
    - `.platform/nginx/conf.d/custom.conf`:
-     \`\`\`
+     ```
      client_max_body_size 50M;
-     \`\`\`
+     ```
 
 3. **Initialize EB**:
-   \`\`\`bash
+   ```
    eb init -p python-3.9 ai-code-reviewer --region us-east-1
    eb create ai-code-reviewer-env --single
-   \`\`\`
+   ```
 
 4. **Set IAM Role**:
    - Create `aws-elasticbeanstalk-ec2-role` with `AmazonBedrockFullAccess`.
    - Attach to EB:
-     \`\`\`bash
+     ```
      aws elasticbeanstalk update-environment \\
        --environment-name ai-code-reviewer-env \\
        --option-settings Namespace=aws:autoscaling:launchconfiguration,OptionName=IamInstanceProfile,Value=aws-elasticbeanstalk-ec2-role
-     \`\`\`
+     ```
 
 5. **Deploy**:
-   \`\`\`bash
+   ```
    git add .
    git commit -m "Deploy to EB"
    eb deploy ai-code-reviewer-env
    eb open
-   \`\`\`
+   ```
    Access at `http://ai-code-reviewer-env.eba-qmwrm295.us-east-1.elasticbeanstalk.com`.
 
 ## CI/CD with GitHub Actions
@@ -311,7 +311,7 @@ Deploy to AWS EB for a live demo:
 Automate deployment:
 
 1. **Workflow File**: `.github/workflows/deploy.yml`:
-   \`\`\`yaml
+   ```yaml
    name: Deploy to AWS Elastic Beanstalk
    on:
      push:
@@ -344,7 +344,7 @@ Automate deployment:
              eb init ai-code-reviewer -p python-3.9 --region us-east-1
              eb use ai-code-reviewer-env
              eb deploy ai-code-reviewer-env
-   \`\`\`
+   ```
 
 2. **Secrets**:
    - Add `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` in GitHub Settings > Secrets.
