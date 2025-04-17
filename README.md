@@ -35,50 +35,83 @@ backends:
     models:
       mistral_large:
         model_id: mistral.mistral-large-2402-v1:0
-        max_tokens: 256
+        max_tokens: 512
         temperature: 0.3
         top_p: 0.9
         top_k: 50
       llama3_70b:
-        model_id: meta.llama3-70b-instruct-v1:0
-        max_tokens: 256
+        model_id: arn:aws:bedrock:us-east-1:324037276468:inference-profile/us.meta.llama3-3-70b-instruct-v1:0
+        max_gen_len: 512
         temperature: 0.5
         top_p: 0.9
       deepseek_r1:
-        model_id: deepseek.deepseek-r1
-        max_tokens: 256
+        model_id: arn:aws:bedrock:us-east-1:324037276468:inference-profile/us.deepseek.r1-v1:0
+        max_tokens: 512
+        temperature: 0.4
+        top_p: 0.9
 prompts:
-  nlp_questions:
-    system: "You are a code evaluation expert. Return JSON only: [{\"answer\": \"string\", \"confidence\": number}]."
+  validation:
+    system: |
+      You are a code analysis expert. Output JSON only: ["language", ...].
+      Identify languages in the files. Do not include explanations.
     user: |
-      Evaluate the code submission based on the following:
-      - SonarQube data: {sonar_data}
-      - Code samples: {code_samples}
-      - Specification: {spec}
-      - Questions: {questions}
-      Return JSON only: [{\"answer\": \"string\", \"confidence\": 1-5}].
-      Do not include prose, explanations, markdown, or code blocks.
+      Files: {file_list}.
+      Detected: {detected_languages}.
+      Return a JSON array of confirmed languages (e.g., ["Python", "JavaScript"]).
   security:
-    system: "You are a security expert. Return JSON only."
+    system: |
+      You are a security expert. Output JSON only:
+      [] or [{"issue": "string", "type": "string", "severity": "low|medium|high", "confidence": integer (1-5), "file": "string", "recommendation": "string"}].
+      Do not include text explanations or markdown.
     user: |
-      Analyze for security issues:
-      - SonarQube data: {sonar_data}
-      - Code samples: {code_samples}
-      Return JSON only: [] or [{\"issue\": \"string\", \"type\": \"string\", \"severity\": \"string\", \"confidence\": number, \"file\": \"string\", \"recommendation\": \"string\"}].
+      Analyze for vulnerabilities:
+      - SonarQube: {sonar_data}
+      - Code: {code_samples}
+      Return JSON array of issues with type, severity, confidence (1-5), file, recommendation.
   quality:
-    system: "You are a quality expert. Return scores as integers (0-100)."
+    system: |
+      You are a code quality expert. Output JSON only:
+      {"maintainability_score": integer (0-100), "code_smells": integer, "doc_coverage": integer (0-100)}.
+      Return exactly this JSON structure. Do not include text, markdown, or other formats.
     user: |
-      Evaluate code quality:
-      - SonarQube data: {sonar_data}
-      - Code samples: {code_samples}
-      Return JSON only: {\"maintainability_score\": number, \"code_smells\": number, \"doc_coverage\": number}.
+      Evaluate quality:
+      - SonarQube: {sonar_data}
+      - Code: {code_samples}
+      Return JSON with maintainability score (0-100), code smells count, doc coverage (0-100).
   performance:
-    system: "You are a performance expert. Return scores as integers (0-100)."
+    system: |
+      You are a performance expert. Output JSON only:
+      {"rating": integer (0-100), "bottlenecks": ["string"], "optimization_suggestions": ["string"]}.
+      Do not include text explanations.
     user: |
       Evaluate performance:
-      - SonarQube data: {sonar_data}
-      - Code samples: {code_samples}
-      Return JSON only: {\"rating\": number, \"bottlenecks\": [], \"optimization_suggestions\": []}.
+      - SonarQube: {sonar_data}
+      - Code: {code_samples}
+      Return JSON with rating (0-100), bottlenecks, and optimization suggestions.
+  scorecard:
+    system: |
+      You are a code evaluation expert. Output JSON only:
+      [{"answer": "string", "confidence": integer (1-5)}].
+      Provide a 20-50 word evaluation based on evidence. Exclude weight. Return exactly one JSON object in an array. Do not include text, markdown, or backticks.
+    user: |
+      Evaluate:
+      - Requirements: {spec}
+      - Quality: {sonar_data}
+      - Code: {code_samples}
+      - Docs: {docs}
+      Question: {question}
+      Category: {category}
+      Weight: {weight}
+      Return JSON with a 20-50 word answer and confidence (1-5).
+      Evaluate:
+      - Requirements: {spec}
+      - Quality: {sonar_data}
+      - Code: {code_samples}
+      - Docs: {docs}
+      Question: {question}
+      Category: {category}
+      Weight: {weight}
+      Return JSON with a 20-50 word answer and confidence (1-5).
 ```
 
 - **backends**: Configures Bedrock models and parameters.
@@ -348,7 +381,7 @@ See `requirements.txt`. Key packages:
 - `pyyaml==6.0.2`: Config parsing
 
 ## Notes
-- To generate sonar-report.json:
+- To generate `sonar-report.json`:
 ```
 sonar-scanner \
   -Dsonar.projectKey=ai-code-reviewer \
