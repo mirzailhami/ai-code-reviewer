@@ -42,7 +42,7 @@ The system is structured for modularity and scalability:
 
 ## AI Models and Configuration
 
-The AI Code Reviewer leverages AWS Bedrock models to power its analysis tasks. Each task is assigned a specific model optimized for its requirements, with the flexibility to change models and configure prompts dynamically via `config/models.yaml`.
+Leverages AWS Bedrock models to power its analysis tasks. Each task is assigned a specific model optimized for its requirements, with the flexibility to change models and configure prompts dynamically via `config/models.yaml`.
 
 ### Models Used by Task
 
@@ -103,7 +103,7 @@ The system supports dynamic model selection and prompt customization, enabling d
 
 ## Language Detection
 
-The AI Code Reviewer supports a wide range of programming languages through dynamic language detection in `ZipProcessor` (`app/core/processors/zip_processor.py`). It processes `submission.zip` files containing any programming language using:
+Supports a wide range of programming languages through dynamic language detection in `ZipProcessor` (`app/core/processors/zip_processor.py`). It processes `submission.zip` files containing any programming language using:
 
 - **Extension-Based Detection**: Maps file extensions to languages via `config/languages.yaml`. Supported languages include Python, TypeScript, JavaScript, HTML, Java, C++, C, C#, Go, Ruby, PHP, Rust, Kotlin, Swift, and more.
 - **Content-Based Detection**: Identifies languages in ambiguous files (e.g., `.txt`, no-extension) using predefined patterns in `config/languages.yaml`.
@@ -125,7 +125,7 @@ This dynamic configuration allows the system to adapt to any programming languag
 
 ## Scoring Methodology
 
-The AI Code Reviewer generates a comprehensive report with scores across four dimensions: **Code Quality**, **Security**, **Performance**, and **Scorecard**. The **Total Score** is a weighted average of these components.
+Generates a comprehensive report with scores across four dimensions: **Code Quality**, **Security**, **Performance**, and **Scorecard**. The **Total Score** is a weighted average of these components.
 
 ### Score Components
 
