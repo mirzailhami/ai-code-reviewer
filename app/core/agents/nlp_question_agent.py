@@ -73,9 +73,9 @@ class NLPQuestionAgent:
 
             format_args = {
                 "sonar_data": json.dumps(sonar_data, indent=2)[:2000],  # Increased from 1500
-                "code_samples": json.dumps(code_chunks[:5], indent=2)[:4000],  # Increased from 2, 3000
-                "spec": spec[:2000],  # Increased from 1500
-                "docs": docs[:2000],  # Increased from 1500
+                "code_samples": json.dumps(code_chunks[:10], indent=2)[:4000],  # Increased from 2, 3000
+                "spec": spec[:2000],
+                "docs": docs[:2000],
                 "question": question_text,
                 "category": category,
                 "weight": weight
@@ -166,8 +166,8 @@ class NLPQuestionAgent:
             if os.path.exists("README.md"):
                 with open("README.md", "r", encoding="utf-8") as f:
                     docs += f"README:\n{f.read()}\n\n"
-            for chunk in code_chunks[:5]:  # Increased from 2
-                docs += f"File: {chunk.get('path', 'unknown')}\n{chunk.get('content', '')[:500]}\n\n"  # Increased from 300
+            for chunk in code_chunks[:10]:
+                docs += f"File: {chunk.get('path', 'unknown')}\n{chunk.get('content', '')[:700]}\n\n"
         except Exception as e:
             logger.warning(f"Failed to load docs: {str(e)}")
 
