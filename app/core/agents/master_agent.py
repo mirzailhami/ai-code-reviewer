@@ -10,6 +10,7 @@ import json
 import yaml
 import asyncio
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,9 @@ class MasterAgent:
     MODEL_TASK_MAPPING = {
         "validation": "mistral_large",
         "security": "mistral_large",
-        "quality": "deepseek_r1",
-        "performance": "llama3_70b",
-        "scorecard": "llama3_70b"
+        "quality": "mistral_large",
+        "performance": "claude3_7_sonnet",
+        "scorecard": "claude3_7_sonnet"
     }
 
     def __init__(self, model_name: str, model_backend: str, tech_stack: List[str] = None):
@@ -30,6 +31,7 @@ class MasterAgent:
         self.model_backend = model_backend
         self.tech_stack = tech_stack or []
         self.is_parallel = model_name.lower() == "parallel"
+        self.task_cache = {}  # Cache task results
 
         available_models = self._get_available_models()
         if self.is_parallel:
@@ -90,6 +92,10 @@ class MasterAgent:
             logger.error(f"Failed to load models: {str(e)}")
             return []
 
+    def _get_cache_key(self, task: str, data: Any) -> str:
+        """Generate cache key for task."""
+        return hashlib.md5(f"{task}:{json.dumps(data)}".encode()).hexdigest()
+
     async def review_code(self, sonar_file: str, zip_path: str, spec_path: str, question_file: str = None) -> Dict[str, Any]:
         """Generate code review report."""
         try:
@@ -117,14 +123,39 @@ class MasterAgent:
             for file in code_data["files"]:
                 chunks = self.splitter.split(file["content"])
                 code_chunks.extend([{"path": file["path"], "content": chunk} for chunk in chunks])
-            code_chunks = code_chunks[:5]
+            code_chunks = code_chunks[:3]
 
-            tasks = [
-                self.analyze_security(sonar_data, code_chunks, self.llms["security"]),
-                self.analyze_quality(sonar_data, code_chunks, self.llms["quality"]),
-                self.analyze_performance(sonar_data, code_chunks, self.llms["performance"]),
-            ]
-            security, quality, performance = await asyncio.gather(*tasks, return_exceptions=True)
+            # Serialize tasks to avoid throttling
+            security = []
+            quality = {"maintainability_score": 50, "code_smells": len(sonar_data["issues"]), "doc_coverage": doc_coverage}
+            performance = {"rating": 60, "bottlenecks": [], "optimization_suggestions": []}
+
+            # Security
+            cache_key = self._get_cache_key("security", {"sonar_data": sonar_data, "code_chunks": code_chunks})
+            if cache_key in self.task_cache:
+                logger.debug("Cache hit for security")
+                security = self.task_cache[cache_key]
+            else:
+                security = await self.analyze_security(sonar_data, code_chunks, self.llms["security"])
+                self.task_cache[cache_key] = security
+
+            # Quality
+            cache_key = self._get_cache_key("quality", {"sonar_data": sonar_data, "code_chunks": code_chunks})
+            if cache_key in self.task_cache:
+                logger.debug("Cache hit for quality")
+                quality = self.task_cache[cache_key]
+            else:
+                quality = await self.analyze_quality(sonar_data, code_chunks, self.llms["quality"])
+                self.task_cache[cache_key] = quality
+
+            # Performance
+            cache_key = self._get_cache_key("performance", {"sonar_data": sonar_data, "code_chunks": code_chunks})
+            if cache_key in self.task_cache:
+                logger.debug("Cache hit for performance")
+                performance = self.task_cache[cache_key]
+            else:
+                performance = await self.analyze_performance(sonar_data, code_chunks, self.llms["performance"])
+                self.task_cache[cache_key] = performance
 
             results = {
                 "screening_result": validation_result,
@@ -136,7 +167,8 @@ class MasterAgent:
                 "timestamp": datetime.now().isoformat()
             }
 
-            results["quality_metrics"]["doc_coverage"] = round(doc_coverage, 1)
+            # Use LLM's doc_coverage if valid, else fall back to SonarParser
+            results["quality_metrics"]["doc_coverage"] = round(quality.get("doc_coverage", doc_coverage), 1)
             results["quality_metrics"]["code_smells"] = len(sonar_data["issues"])
 
             if question_file:
@@ -145,9 +177,9 @@ class MasterAgent:
                         spec = f.read()
                     results["scorecard"] = await self.nlp_agent.process_questions(question_file, sonar_data, code_chunks, spec)
                     logger.info(f"Processed {len(results['scorecard'])} scorecard answers")
-                    # Fallback to mistral_large if no valid answers
-                    if not any(a.get("answer") not in ["Evaluation not available", "No valid answers generated"] for a in results["scorecard"]):
-                        logger.warning("No valid scorecard answers with llama3_70b, retrying with mistral_large")
+                    if not any(a.get("answer") not in ["Evaluation not available", "No valid answers generated", "Evaluation failed"] for a in results["scorecard"]):
+                        logger.warning("No valid scorecard answers with claude3_7_sonnet, retrying with mistral_large after 8s delay")
+                        await asyncio.sleep(8)
                         self.nlp_agent = NLPQuestionAgent(model_name="mistral_large", model_backend=self.model_backend)
                         results["scorecard"] = await self.nlp_agent.process_questions(question_file, sonar_data, code_chunks, spec)
                 except Exception as e:
@@ -162,34 +194,46 @@ class MasterAgent:
                         }
                     ]
 
-            security_score = 100 - (len(results["security_findings"]) * 20)
+            security_score = 100 - (len(results["security_findings"]) * 15)
             scorecard_answers = [
                 a for a in results["scorecard"]
-                if a.get("answer") not in ["Evaluation not available", "No valid answers generated"]
+                if a.get("answer") not in ["Evaluation not available", "No valid answers generated", "Evaluation failed"]
             ]
-            scorecard_score = (
-                sum(a["confidence"] * a["weight"] for a in scorecard_answers if "confidence" in a and "weight" in a)
-                / max(1, sum(a["weight"] for a in scorecard_answers if "weight" in a))
-                * 20  # Normalize to 0-100
-            ) if scorecard_answers else 0
+            # Normalize scorecard score to 0-100
+            if scorecard_answers:
+                sum_conf_weight = sum(a["confidence"] * a["weight"] for a in scorecard_answers if "confidence" in a and "weight" in a)
+                sum_weight = sum(a["weight"] for a in scorecard_answers if "weight" in a)
+                # Scale confidence (1-5) to 0-100: (confidence/5) * weight
+                scorecard_score = (sum_conf_weight / sum_weight) * (100 / 5) if sum_weight > 0 else 0
+            else:
+                scorecard_score = 0
+
+            # Ensure all components are 0-100
+            quality_score = min(results["quality_metrics"].get("maintainability_score", 50), 100)
+            security_score = max(min(security_score, 100), 0)
+            performance_score = min(results["performance_metrics"].get("rating", 60), 100)
+            scorecard_score = max(min(scorecard_score, 100), 0)
+
             results["summary"] = {
-                "code_quality": max(100 - len(sonar_data["issues"]) * 10, 50),
-                "security": max(security_score, 0),
-                "performance": results["performance_metrics"].get("rating", 60),
+                "code_quality": quality_score,
+                "security": security_score,
+                "performance": performance_score,
                 "scorecard": round(scorecard_score, 1),
                 "total": round(
-                    results["quality_metrics"].get("maintainability_score", 50) * 0.4 +
-                    max(security_score, 0) * 0.2 +
-                    results["performance_metrics"].get("rating", 60) * 0.2 +
+                    quality_score * 0.35 +
+                    security_score * 0.25 +
+                    performance_score * 0.2 +
                     scorecard_score * 0.2, 1
                 )
             }
 
             logger.info(f"Review completed: total_score={results['summary']['total']}, scorecard_score={results['summary']['scorecard']}, answered_questions={len(scorecard_answers)}")
+            with open("report.json", "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
             return results
         except Exception as e:
             logger.error(f"Review failed: {str(e)}")
-            return {
+            results = {
                 "screening_result": {"valid": False, "reason": str(e), "languages": []},
                 "security_findings": [],
                 "quality_metrics": {"maintainability_score": 0, "code_smells": 0, "doc_coverage": 0},
@@ -198,21 +242,31 @@ class MasterAgent:
                 "summary": {"code_quality": 0, "security": 0, "performance": 0, "scorecard": 0, "total": 0.0},
                 "timestamp": datetime.now().isoformat()
             }
+            with open("report.json", "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
+            return results
 
     async def analyze_security(self, sonar_data: Dict, code_chunks: List[Dict], llm) -> List[Dict]:
         """Analyze security issues."""
         messages = [
-            {"role": "system", "content": self.prompts.get("security", {}).get("system", "")},
+            {
+                "role": "system",
+                "content": self.prompts.get("security", {}).get("system", "") + "\nReturn a JSON array of issues: [{'issue': str, 'type': str, 'severity': str, 'confidence': int, 'file': str, 'recommendation': str}]. No extra text or markdown. Ensure valid JSON syntax."
+            },
             {"role": "user", "content": self.prompts.get("security", {}).get("user", "").format(
-                sonar_data=json.dumps(sonar_data, indent=2)[:500],
-                code_samples=json.dumps(code_chunks, indent=2)[:1000]
+                sonar_data=json.dumps(sonar_data, indent=2)[:300],
+                code_samples=json.dumps(code_chunks, indent=2)[:500]
             )}
         ]
         try:
             logger.debug(f"Using model {llm.model_name} for security: prompt={json.dumps(messages)[:200]}...")
             response = await llm.generate(messages)
             logger.debug(f"Using model {llm.model_name} for security: response={response[:200]}...")
-            return json.loads(response) if response else []
+            parsed = json.loads(response) if response else []
+            if not isinstance(parsed, list):
+                logger.warning(f"Expected array for security, got: {response[:100]}")
+                return []
+            return parsed
         except json.JSONDecodeError as e:
             logger.error(f"Security JSON parsing failed: {str(e)}, response={response[:200]}")
             return []
@@ -223,21 +277,27 @@ class MasterAgent:
     async def analyze_quality(self, sonar_data: Dict, code_chunks: List[Dict], llm) -> Dict:
         """Analyze code quality."""
         messages = [
-            {"role": "system", "content": self.prompts.get("quality", {}).get("system", "")},
+            {
+                "role": "system",
+                "content": self.prompts.get("quality", {}).get("system", "") + "\nReturn a JSON object: {'maintainability_score': int, 'code_smells': int, 'doc_coverage': float}. No extra text or markdown. Assign maintainability_score 80-100 for well-structured code unless clear issues exist. Ensure valid JSON syntax."
+            },
             {"role": "user", "content": self.prompts.get("quality", {}).get("user", "").format(
-                sonar_data=json.dumps(sonar_data, indent=2)[:500],
-                code_samples=json.dumps(code_chunks, indent=2)[:1000]
+                sonar_data=json.dumps(sonar_data, indent=2)[:300],
+                code_samples=json.dumps(code_chunks, indent=2)[:500]
             )}
         ]
         try:
             logger.debug(f"Using model {llm.model_name} for quality: prompt={json.dumps(messages)[:200]}...")
             response = await llm.generate(messages)
             logger.debug(f"Using model {llm.model_name} for quality: response={response[:200]}...")
-            metrics = json.loads(response) if response else {}
+            parsed = json.loads(response) if response else {}
+            if not isinstance(parsed, dict):
+                logger.warning(f"Expected object for quality, got: {response[:100]}")
+                return {"maintainability_score": 50, "code_smells": len(sonar_data["issues"]), "doc_coverage": 0}
             return {
-                "maintainability_score": metrics.get("maintainability_score", 50),
-                "code_smells": metrics.get("code_smells", len(sonar_data["issues"])),
-                "doc_coverage": metrics.get("doc_coverage", 0)
+                "maintainability_score": parsed.get("maintainability_score", 50),
+                "code_smells": parsed.get("code_smells", len(sonar_data["issues"])),
+                "doc_coverage": parsed.get("doc_coverage", 0)
             }
         except json.JSONDecodeError as e:
             logger.error(f"Quality JSON parsing failed: {str(e)}, response={response[:200]}")
@@ -249,17 +309,28 @@ class MasterAgent:
     async def analyze_performance(self, sonar_data: Dict, code_chunks: List[Dict], llm) -> Dict:
         """Analyze performance."""
         messages = [
-            {"role": "system", "content": self.prompts.get("performance", {}).get("system", "")},
+            {
+                "role": "system",
+                "content": self.prompts.get("performance", {}).get("system", "") + "\nReturn a JSON object: {'rating': int, 'bottlenecks': [str], 'optimization_suggestions': [str]}. No extra text or markdown. Assign rating 80-100 for efficient code unless clear bottlenecks exist. Ensure valid JSON syntax."
+            },
             {"role": "user", "content": self.prompts.get("performance", {}).get("user", "").format(
-                sonar_data=json.dumps(sonar_data, indent=2)[:500],
-                code_samples=json.dumps(code_chunks, indent=2)[:1000]
+                sonar_data=json.dumps(sonar_data, indent=2)[:300],
+                code_samples=json.dumps(code_chunks, indent=2)[:500]
             )}
         ]
         try:
             logger.debug(f"Using model {llm.model_name} for performance: prompt={json.dumps(messages)[:200]}...")
             response = await llm.generate(messages)
             logger.debug(f"Using model {llm.model_name} for performance: response={response[:200]}...")
-            return json.loads(response) if response else {"rating": 60, "bottlenecks": [], "optimization_suggestions": []}
+            parsed = json.loads(response) if response else {}
+            if not isinstance(parsed, dict):
+                logger.warning(f"Expected object for performance, got: {response[:100]}")
+                return {"rating": 60, "bottlenecks": [], "optimization_suggestions": []}
+            return {
+                "rating": parsed.get("rating", 60),
+                "bottlenecks": parsed.get("bottlenecks", []),
+                "optimization_suggestions": parsed.get("optimization_suggestions", [])
+            }
         except json.JSONDecodeError as e:
             logger.error(f"Performance JSON parsing failed: {str(e)}, response={response[:200]}")
             return {"rating": 60, "bottlenecks": [], "optimization_suggestions": []}

@@ -16,6 +16,7 @@ import logging
 import yaml
 import json
 import tempfile
+import time
 from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -140,7 +141,7 @@ async def analyze(
         model_name: LLM model name (default: "parallel").
 
     Returns:
-        dict: Analysis results including validity, quality, and scorecard answers.
+        dict: Analysis results including validity, quality, scorecard answers, and runtime.
 
     Raises:
         HTTPException: If required inputs are missing or invalid.
@@ -149,10 +150,12 @@ async def analyze(
         {
             "screening_result": {"valid": true, "languages": ["Python"]},
             "quality_metrics": {"doc_coverage": 50, ...},
+            "runtime": 140.478,
             ...
         }
     """
     try:
+        start_time = time.time()
         logger.info(
             f"Received: sonar_report={sonar_report.filename}, "
             f"code_zip={code_zip.filename}, "
@@ -201,6 +204,9 @@ async def analyze(
                 spec_path=spec_path,
                 question_file=scorecard_path
             )
+
+            runtime = time.time() - start_time
+            result["runtime"] = runtime
 
             return result
 
