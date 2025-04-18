@@ -11,7 +11,15 @@ from app.core.llm.manager import LLMManager
 logger = logging.getLogger(__name__)
 
 class NLPQuestionAgent:
+    """Agent for processing scorecard questions using an LLM."""
+    
     def __init__(self, model_name: str, model_backend: str):
+        """Initialize NLPQuestionAgent with LLM and prompts.
+        
+        Args:
+            model_name (str): Name of the LLM model (e.g., claude3_7_sonnet).
+            model_backend (str): Backend for the LLM (e.g., bedrock).
+        """
         self.model_name = model_name
         self.model_backend = model_backend
         self.llm = LLMManager(model_name=model_name, model_backend=model_backend)
@@ -25,8 +33,20 @@ class NLPQuestionAgent:
             logger.error(f"Failed to load prompts: {str(e)}")
             self.prompts = {}
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=1, max_time=5)
+    @backoff.on_exception(backoff.expo, Exception, max_tries=3, max_time=10)
     async def process_question(self, q: Dict, sonar_data: Dict, code_chunks: List[Dict], spec: str, docs: str) -> Dict:
+        """Process a single scorecard question using the LLM.
+        
+        Args:
+            q (dict): Question details (question, category, weight).
+            sonar_data (dict): SonarQube report data.
+            code_chunks (list): List of code samples.
+            spec (str): Challenge specification.
+            docs (str): Documentation content.
+            
+        Returns:
+            dict: Result with question, category, answer, confidence, and weight.
+        """
         question_text = q.get("question", "Unknown")
         category = q.get("category", "")
         weight = q.get("weight", 0)
@@ -52,10 +72,10 @@ class NLPQuestionAgent:
                 return default_result
 
             format_args = {
-                "sonar_data": json.dumps(sonar_data, indent=2)[:500],
-                "code_samples": json.dumps(code_chunks[:2], indent=2)[:1000],
-                "spec": spec[:700],
-                "docs": docs[:700],
+                "sonar_data": json.dumps(sonar_data, indent=2)[:2000],  # Increased from 1500
+                "code_samples": json.dumps(code_chunks[:5], indent=2)[:4000],  # Increased from 2, 3000
+                "spec": spec[:2000],  # Increased from 1500
+                "docs": docs[:2000],  # Increased from 1500
                 "question": question_text,
                 "category": category,
                 "weight": weight
@@ -67,9 +87,9 @@ class NLPQuestionAgent:
                 {"role": "user", "content": user_content}
             ]
 
-            logger.debug(f"Processing '{question_text[:50]}': prompt={json.dumps(prompt)[:200]}...")
+            logger.debug(f"Processing '{question_text[:50]}': prompt={json.dumps(prompt)[:500]}...")
             response = await self.llm.generate(prompt)
-            logger.debug(f"Response for '{question_text[:50]}': {response[:200]}...")
+            logger.debug(f"Full LLM response for '{question_text[:50]}': {response}")
 
             if not response or "Evaluation failed" in response:
                 logger.warning(f"Empty or failed response for: {question_text}")
@@ -88,7 +108,7 @@ class NLPQuestionAgent:
                     logger.warning(f"Invalid format: {json_str[:100]}")
                     return default_result
 
-                answer = str(answer_data.get("answer", ""))[:200]
+                answer = str(answer_data.get("answer", ""))
                 confidence = min(max(int(answer_data.get("confidence", 1)), 1), 5)
 
                 result = {
@@ -99,7 +119,6 @@ class NLPQuestionAgent:
                     "weight": weight
                 }
                 self.response_cache[cache_key] = result  # Cache result
-                await asyncio.sleep(1)  # Reduced delay
                 return result
             except json.JSONDecodeError as e:
                 logger.warning(f"JSON parse failed: {json_str[:100]}... Error: {e}")
@@ -110,10 +129,20 @@ class NLPQuestionAgent:
 
         except Exception as e:
             logger.error(f"Question processing error: {e}")
-            await asyncio.sleep(3)  # Reduced delay
             return default_result
 
     async def process_questions(self, question_file: str, sonar_data: Dict, code_chunks: List[Dict], spec: str) -> List[Dict]:
+        """Process multiple scorecard questions from a file.
+        
+        Args:
+            question_file (str): Path to JSON file with questions.
+            sonar_data (dict): SonarQube report data.
+            code_chunks (list): List of code samples.
+            spec (str): Challenge specification.
+            
+        Returns:
+            list: List of results for each question.
+        """
         logger.debug(f"Processing questions: {question_file}")
         try:
             with open(question_file, "r", encoding="utf-8") as f:
@@ -137,8 +166,8 @@ class NLPQuestionAgent:
             if os.path.exists("README.md"):
                 with open("README.md", "r", encoding="utf-8") as f:
                     docs += f"README:\n{f.read()}\n\n"
-            for chunk in code_chunks[:2]:
-                docs += f"File: {chunk.get('path', 'unknown')}\n{chunk.get('content', '')[:300]}\n\n"
+            for chunk in code_chunks[:5]:  # Increased from 2
+                docs += f"File: {chunk.get('path', 'unknown')}\n{chunk.get('content', '')[:500]}\n\n"  # Increased from 300
         except Exception as e:
             logger.warning(f"Failed to load docs: {str(e)}")
 
@@ -146,6 +175,5 @@ class NLPQuestionAgent:
         for q in questions:
             answer = await self.process_question(q, sonar_data, code_chunks, spec, docs)
             answers.append(answer)
-            await asyncio.sleep(1)  # Reduced delay
         logger.info(f"Generated {len(answers)} answers")
         return answers

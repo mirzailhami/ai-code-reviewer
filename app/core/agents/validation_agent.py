@@ -46,7 +46,7 @@ class ValidationAgent:
         system_prompt = self.prompts.get("validation", {}).get("system", "You are a code analysis expert. Output JSON only: [\"language\", ...]. Identify languages in the provided files based on file extensions and content. Do not include explanations or non-language terms.")
         user_prompt = self.prompts.get("validation", {}).get("user", "Files: {file_list}.\nDetected: {detected_languages}.\nReturn a JSON array of confirmed languages (e.g., [\"Python\", \"TypeScript\"]).").format(
             file_list=json.dumps([{f["path"]: f["content"][:100]} for f in files[:5]], indent=2),
-            detected_languages=json.dumps(list(detected_languages))  # Convert set to list
+            detected_languages=json.dumps(list(detected_languages))
         )
         messages = [
             {"role": "system", "content": system_prompt},
@@ -56,13 +56,15 @@ class ValidationAgent:
             logger.debug(f"Validation prompt: {json.dumps(messages)[:500]}...")
             response = await self.llm.generate(messages)
             logger.debug(f"Validation response raw: {response[:200]}")
-            languages = json.loads(response) if response else detected_languages
-            if not isinstance(languages, list):
+            llm_languages = json.loads(response) if response else detected_languages
+            if not isinstance(llm_languages, list):
                 logger.warning(f"Expected array for validation, got: {response[:100]}")
                 return detected_languages
-            normalized_languages = [self._normalize_language(lang) for lang in languages if self._normalize_language(lang)]
-            logger.debug(f"LLM-validated languages: {normalized_languages}")
-            return normalized_languages
+            normalized_languages = [self._normalize_language(lang) for lang in llm_languages if self._normalize_language(lang)]
+            # Merge LLM languages with initially detected languages
+            final_languages = list(set(detected_languages + normalized_languages))
+            logger.debug(f"LLM-validated languages: {normalized_languages}, Final merged languages: {final_languages}")
+            return final_languages
         except Exception as e:
             logger.error(f"LLM validation failed with {self.llm.model_name}: {str(e)}")
             if self.llm.model_name == "mistral_large":
@@ -71,13 +73,14 @@ class ValidationAgent:
                 try:
                     response = await claude_llm.generate(messages)
                     logger.debug(f"Claude validation response: {response[:200]}")
-                    languages = json.loads(response) if response else detected_languages
-                    if not isinstance(languages, list):
+                    llm_languages = json.loads(response) if response else detected_languages
+                    if not isinstance(llm_languages, list):
                         logger.warning(f"Claude expected array, got: {response[:100]}")
                         return detected_languages
-                    normalized_languages = [self._normalize_language(lang) for lang in languages if self._normalize_language(lang)]
-                    logger.debug(f"Claude-validated languages: {normalized_languages}")
-                    return normalized_languages
+                    normalized_languages = [self._normalize_language(lang) for lang in llm_languages if self._normalize_language(lang)]
+                    final_languages = list(set(detected_languages + normalized_languages))
+                    logger.debug(f"Claude-validated languages: {normalized_languages}, Final merged languages: {final_languages}")
+                    return final_languages
                 except Exception as claude_e:
                     logger.error(f"Claude validation failed: {str(claude_e)}")
             return list(detected_languages)  # Ensure list output

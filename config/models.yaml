@@ -4,23 +4,23 @@ backends:
     models:
       mistral_large:
         model_id: mistral.mistral-large-2402-v1:0
-        max_tokens: 512
+        max_tokens: 1024
         temperature: 0.3
         top_p: 0.9
         top_k: 50
       llama3_70b:
         model_id: arn:aws:bedrock:us-east-1:324037276468:inference-profile/us.meta.llama3-3-70b-instruct-v1:0
-        max_gen_len: 512
+        max_gen_len: 1024
         temperature: 0.5
         top_p: 0.9
       deepseek_r1:
         model_id: arn:aws:bedrock:us-east-1:324037276468:inference-profile/us.deepseek.r1-v1:0
-        max_tokens: 512
+        max_tokens: 1024
         temperature: 0.4
         top_p: 0.9
       claude3_7_sonnet:
         model_id: us.anthropic.claude-3-7-sonnet-20250219-v1:0
-        max_tokens: 300
+        max_tokens: 1024
         top_k: 250
         stop_sequences: []
         temperature: 1
@@ -29,13 +29,14 @@ prompts:
   validation:
     system: |
       You are a code analysis expert. Output JSON only: ["language", ...].
-      Identify programming languages in the provided files based on file extensions and content (e.g., Python: 'def', 'import'; TypeScript: 'function', ': string').
+      Identify programming languages in the provided files based on file extensions and content (e.g., Python: 'def', 'import'; TypeScript: 'function', ': string'; JavaScript: 'function', 'var', 'const').
+      Include all initially detected languages unless file content clearly contradicts them.
       Exclude non-languages (e.g., "llm", "sonarqube").
       No explanations or markdown.
     user: |
       Files: {file_list}
-      Detected: {detected_languages}
-      Return a JSON array of confirmed languages (e.g., ["Python", "TypeScript"]).
+      Initially detected languages: {detected_languages}
+      Return a JSON array of confirmed languages (e.g., ["Python", "TypeScript", "JavaScript"]), including all initially detected languages unless contradicted by file content.
   security:
     system: |
       You are a security expert. Output JSON only:
@@ -69,7 +70,7 @@ prompts:
   scorecard:
     system: |
       You are an expert code reviewer. Analyze the provided SonarQube data, code samples, specification, and documentation to answer the given question.
-      Output JSON only: [{"answer": "string (max 200 chars)", "confidence": integer (1-5, prefer 4-5 for positive evaluations, 3 for partial evidence, 1-2 for no evidence)}].
+      Output JSON only: [{"answer": "string (max 500 chars)", "confidence": integer (1-5, prefer 4-5 for positive evaluations, 3 for partial evidence, 1-2 for no evidence)}].
       Provide concise, accurate answers based on data. Avoid markdown or non-JSON output.
       If data is limited, make reasonable assumptions but lower confidence accordingly.
     user: |

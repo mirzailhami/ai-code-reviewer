@@ -247,7 +247,7 @@ The system processes the following inputs:
     --zip-path tests/test_data/submission.zip \
     --spec-path tests/test_data/spec.txt \
     --question-file tests/test_data/scorecard.json \
-    --tech-stack "TypeScript, Python" | tee cli_log.txt
+    --tech-stack "TypeScript, Python"
    ```
    Output file: `report.json`
 
