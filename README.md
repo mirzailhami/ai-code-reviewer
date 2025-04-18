@@ -8,7 +8,7 @@ Key capabilities include:
 
 - **Tech Stack Validation**: Ensures submissions align with specified languages, supporting a wide range of programming languages (e.g., Python, Java, C++, Go).
 - **SonarQube Integration**: Analyzes code for quality, security, and performance issues.
-- **AI-Powered Insights**: Leverages large language models (LLMs) to assess code quality, performance, security, functionality, innovation, and documentation.
+- **AI-Powered Insights**: Leverages large language models (LLMs) to assess code quality, performance, security, functionality, innovation, documentation and more.
 - **Comprehensive Reporting**: Delivers detailed JSON reports with actionable feedback.
 - **Scalable Deployment**: Supports local development and AWS Elastic Beanstalk for production.
 
@@ -103,7 +103,7 @@ The system supports dynamic model selection and prompt customization, enabling d
 
 ## Language Detection
 
-Supports a wide range of programming languages through dynamic language detection in `ZipProcessor` (`app/core/processors/zip_processor.py`). It processes `submission.zip` files containing any programming language using:
+Supports a wide range of programming languages through dynamic language detection in `ZipProcessor`. It processes `submission.zip` files containing any programming language using:
 
 - **Extension-Based Detection**: Maps file extensions to languages via `config/languages.yaml`. Supported languages include Python, TypeScript, JavaScript, HTML, Java, C++, C, C#, Go, Ruby, PHP, Rust, Kotlin, Swift, and more.
 - **Content-Based Detection**: Identifies languages in ambiguous files (e.g., `.txt`, no-extension) using predefined patterns in `config/languages.yaml`.
@@ -169,7 +169,7 @@ Generates a comprehensive report with scores across four dimensions: **Code Qual
 
 ## Sample Output Response
 
-The system outputs a JSON report (`report.json`) with detailed metrics and insights. Below is a sample response:
+The system outputs a JSON with detailed metrics and insights. Below is a sample response:
 
 ```json
 {
@@ -475,8 +475,8 @@ Key dependencies:
 
 ## Demo
 
-- **Local**: `http://localhost:8000`
-- **Live**: `http://ai-code-reviewer-env.eba-qmwrm295.us-east-1.elasticbeanstalk.com`
+- **Local**: [http://localhost:8000](http://localhost:8000)
+- **Live**: [http://ai-code-reviewer-env.eba-qmwrm295.us-east-1.elasticbeanstalk.com](http://ai-code-reviewer-env.eba-qmwrm295.us-east-1.elasticbeanstalk.com)
 
 ## License
 
