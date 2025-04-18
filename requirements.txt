@@ -12,3 +12,4 @@ backoff==2.2.1
 gunicorn==23.0.0
 awsebcli==3.21.0
 awscli==1.35.7
+pygments==2.18.0

@@ -1,0 +1,32 @@
+languages:
+  extensions:
+    .py: Python
+    .ts: TypeScript
+    .tsx: TypeScript
+    .js: JavaScript
+    .jsx: JavaScript
+    .html: HTML
+    .java: Java
+    .cpp: C++
+    .c: C
+    .cs: C#
+    .go: Go
+    .rb: Ruby
+    .php: PHP
+    .rs: Rust
+    .kt: Kotlin
+    .swift: Swift
+  patterns:
+    Python: ["def ", "import "]
+    TypeScript: ["function ", ": string"]
+    JavaScript: ["function ", "var ", "const "]
+    Java: ["public class ", "import java."]
+    C++: ["#include ", "class "]
+    C: ["#include ", "int main("]
+    C#: ["public class ", "using System;"]
+    Go: ["package main", "func main("]
+    Ruby: ["def ", "require "]
+    PHP: ["<?php", "function "]
+    Rust: ["fn main(", "use std::"]
+    Kotlin: ["fun main(", "import android."]
+    Swift: ["import Swift", "func "]
