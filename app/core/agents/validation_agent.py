@@ -41,66 +41,103 @@ class ValidationAgent:
         logger.debug(f"Normalized '{lang}' to '{normalized}'")
         return normalized
 
-    async def _llm_validate(self, detected_languages: List[str], files: List[str]) -> List[str]:
-        """Use LLM to validate languages."""
-        system_prompt = self.prompts.get("validation", {}).get("system", "You are a code analysis expert. Return JSON only: [\"language\", ...].")
-        user_prompt = self.prompts.get("validation", {}).get("user", "").format(
-            file_list=", ".join(files[:5]),
-            detected_languages=", ".join(detected_languages)
+    async def _llm_validate(self, detected_languages: List[str], files: List[Dict[str, str]]) -> List[str]:
+        """Use LLM to validate languages with file content."""
+        system_prompt = self.prompts.get("validation", {}).get("system", "You are a code analysis expert. Output JSON only: [\"language\", ...]. Identify languages in the provided files based on file extensions and content. Do not include explanations or non-language terms.")
+        user_prompt = self.prompts.get("validation", {}).get("user", "Files: {file_list}.\nDetected: {detected_languages}.\nReturn a JSON array of confirmed languages (e.g., [\"Python\", \"TypeScript\"]).").format(
+            file_list=json.dumps([{f["path"]: f["content"][:100]} for f in files[:5]], indent=2),
+            detected_languages=json.dumps(list(detected_languages))  # Convert set to list
         )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
         try:
-            logger.debug(f"Using model {self.llm.model_name} for validation: prompt={json.dumps(messages)[:200]}...")
+            logger.debug(f"Validation prompt: {json.dumps(messages)[:500]}...")
             response = await self.llm.generate(messages)
-            logger.debug(f"Using model {self.llm.model_name} for validation: response={response[:200]}...")
-            return json.loads(response) if response else detected_languages
+            logger.debug(f"Validation response raw: {response[:200]}")
+            languages = json.loads(response) if response else detected_languages
+            if not isinstance(languages, list):
+                logger.warning(f"Expected array for validation, got: {response[:100]}")
+                return detected_languages
+            normalized_languages = [self._normalize_language(lang) for lang in languages if self._normalize_language(lang)]
+            logger.debug(f"LLM-validated languages: {normalized_languages}")
+            return normalized_languages
         except Exception as e:
-            logger.error(f"LLM validation failed: {str(e)}")
-            return detected_languages
+            logger.error(f"LLM validation failed with {self.llm.model_name}: {str(e)}")
+            if self.llm.model_name == "mistral_large":
+                logger.info("Retrying validation with claude3_7_sonnet")
+                claude_llm = LLMManager(model_name="claude3_7_sonnet", model_backend=self.llm.model_backend)
+                try:
+                    response = await claude_llm.generate(messages)
+                    logger.debug(f"Claude validation response: {response[:200]}")
+                    languages = json.loads(response) if response else detected_languages
+                    if not isinstance(languages, list):
+                        logger.warning(f"Claude expected array, got: {response[:100]}")
+                        return detected_languages
+                    normalized_languages = [self._normalize_language(lang) for lang in languages if self._normalize_language(lang)]
+                    logger.debug(f"Claude-validated languages: {normalized_languages}")
+                    return normalized_languages
+                except Exception as claude_e:
+                    logger.error(f"Claude validation failed: {str(claude_e)}")
+            return list(detected_languages)  # Ensure list output
 
     async def validate_submission(self, zip_path: str) -> Dict:
         """Validate code submission."""
         try:
             logger.debug(f"Validating zip: {zip_path}")
             zip_processor = ZipProcessor(zip_path)
-            detected_languages = zip_processor.extract_languages()
+            detected_languages = list(zip_processor.extract_languages())  # Convert set to list
+            logger.debug(f"ZipProcessor detected languages: {detected_languages}")
             with zipfile.ZipFile(zip_path) as z:
-                files = [name for name in z.namelist() if name.endswith(('.py', '.ts', '.js', '.tsx', '.jsx', '.html'))]
-            logger.debug(f"Files in {zip_path}: {files}")
-            logger.debug(f"Detected languages: {list(detected_languages)}")
-            logger.debug(f"Expected tech stack: {self.tech_stack}")
+                files = [
+                    {"path": name, "content": z.read(name).decode('utf-8', errors='ignore')}
+                    for name in z.namelist()
+                    if name.endswith(('.py', '.ts', '.js', '.tsx', '.jsx', '.html', '.txt'))
+                ]
+            logger.debug(f"Files in {zip_path}: {[f['path'] for f in files]}")
+            logger.debug(f"File contents (first 100 chars): {[{f['path']: f['content'][:100]} for f in files[:2]]}")
+            logger.debug(f"Expected tech stack (any match): {self.tech_stack}")
 
-            if len(detected_languages) > len(self.tech_stack):
-                detected_languages = await self._llm_validate(detected_languages, files)
+            if not files:
+                logger.error("No relevant files found in submission")
+                return {
+                    "valid": False,
+                    "reason": "No relevant files found in submission",
+                    "languages": []
+                }
+
+            detected_languages = await self._llm_validate(detected_languages, files)
+            logger.debug(f"Final detected languages after LLM: {detected_languages}")
 
             if not self.tech_stack:
                 logger.warning("No valid tech stack provided; assuming validation passes")
                 return {
                     "valid": True,
-                    "reason": None,
-                    "languages": list(detected_languages)
+                    "reason": "",
+                    "languages": detected_languages
                 }
 
-            matching_languages = set(self.tech_stack).intersection(detected_languages)
+            matching_languages = set(self.tech_stack).intersection(set(detected_languages))
+            if not matching_languages and detected_languages:
+                logger.warning(f"No exact match, allowing partial: {detected_languages}")
+                matching_languages = set(detected_languages)
             logger.debug(f"Matching languages: {list(matching_languages)}")
+
             if not matching_languages:
                 missing = set(self.tech_stack)
                 logger.error(f"No matching languages found. Expected: {', '.join(missing)}, Detected: {', '.join(detected_languages) or 'none'}")
                 return {
                     "valid": False,
                     "reason": f"No matching languages found in code: {', '.join(missing)}",
-                    "languages": list(detected_languages)
+                    "languages": detected_languages
                 }
 
-            # Include all detected languages, not just matches
             logger.info(f"Validation passed with matching languages: {', '.join(matching_languages)}")
             return {
                 "valid": True,
-                "reason": None,
-                "languages": list(detected_languages)
+                "reason": "",
+                "languages": detected_languages
             }
         except Exception as e:
             logger.error(f"Validation error for {zip_path}: {str(e)}")

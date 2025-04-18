@@ -18,15 +18,24 @@ backends:
         max_tokens: 512
         temperature: 0.4
         top_p: 0.9
+      claude3_7_sonnet:
+        model_id: us.anthropic.claude-3-7-sonnet-20250219-v1:0
+        max_tokens: 300
+        top_k: 250
+        stop_sequences: []
+        temperature: 1
+        top_p: 0.999
 prompts:
   validation:
     system: |
       You are a code analysis expert. Output JSON only: ["language", ...].
-      Identify languages in the files. Do not include explanations.
+      Identify programming languages in the provided files based on file extensions and content (e.g., Python: 'def', 'import'; TypeScript: 'function', ': string').
+      Exclude non-languages (e.g., "llm", "sonarqube").
+      No explanations or markdown.
     user: |
-      Files: {file_list}.
-      Detected: {detected_languages}.
-      Return a JSON array of confirmed languages (e.g., ["Python", "JavaScript"]).
+      Files: {file_list}
+      Detected: {detected_languages}
+      Return a JSON array of confirmed languages (e.g., ["Python", "TypeScript"]).
   security:
     system: |
       You are a security expert. Output JSON only:
@@ -59,25 +68,16 @@ prompts:
       Return JSON with rating (0-100), bottlenecks, and optimization suggestions.
   scorecard:
     system: |
-      You are a code evaluation expert. Output JSON only:
-      [{"answer": "string", "confidence": integer (1-5)}].
-      Provide a 20-50 word evaluation based on evidence. Exclude weight. Return exactly one JSON object in an array. Do not include text, markdown, or backticks.
+      You are an expert code reviewer. Analyze the provided SonarQube data, code samples, specification, and documentation to answer the given question.
+      Output JSON only: [{"answer": "string (max 200 chars)", "confidence": integer (1-5, prefer 4-5 for positive evaluations, 3 for partial evidence, 1-2 for no evidence)}].
+      Provide concise, accurate answers based on data. Avoid markdown or non-JSON output.
+      If data is limited, make reasonable assumptions but lower confidence accordingly.
     user: |
-      Evaluate:
-      - Requirements: {spec}
-      - Quality: {sonar_data}
-      - Code: {code_samples}
-      - Docs: {docs}
+      SonarQube: {sonar_data}
+      Code: {code_samples}
+      Spec: {spec}
+      Docs: {docs}
       Question: {question}
       Category: {category}
       Weight: {weight}
-      Return JSON with a 20-50 word answer and confidence (1-5).
-      Evaluate:
-      - Requirements: {spec}
-      - Quality: {sonar_data}
-      - Code: {code_samples}
-      - Docs: {docs}
-      Question: {question}
-      Category: {category}
-      Weight: {weight}
-      Return JSON with a 20-50 word answer and confidence (1-5).
+      Answer in JSON array format with a clear evaluation.

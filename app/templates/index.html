@@ -57,6 +57,10 @@
         </form>
       </div>
       <div class="md:col-span-2 space-y-6">
+        <div id="loadingSpinner" class="hidden flex items-center justify-center bg-white p-8 rounded-lg shadow">
+          <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+          <p class="ml-4 text-gray-700">Analyzing code...</p>
+        </div>
         <div id="resultsContainer" class="hidden space-y-6">
           <div id="scorecard" class="bg-white p-6 rounded-lg shadow"></div>
           <div id="nlpResults" class="bg-white p-6 rounded-lg shadow"></div>
