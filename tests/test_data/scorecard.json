@@ -1,0 +1,22 @@
+[
+  {
+    "question": "The solution provides a unique approach to solving the given problem(s).",
+    "category": "Innovation & Creativity",
+    "weight": 20.0
+  },
+  {
+    "question": "Requirements are implemented completely according to the requirements without major use cases or experiences missing.",
+    "category": "Functionality & Completeness",
+    "weight": 50.0
+  },
+  {
+    "question": "The technical solution is modern and designed with best practices to complement the requirements.",
+    "category": "Technical Implementation",
+    "weight": 20.0
+  },
+  {
+    "question": "Complete and easy-to-follow documentation is included with the solution. This includes instructions to setup and run the solution in addition to a demo video.",
+    "category": "Presentation (Docs & Demo)",
+    "weight": 10.0
+  }
+]
