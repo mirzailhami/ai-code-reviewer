@@ -44,8 +44,9 @@ jobs:
         run: |
           aws sts get-caller-identity || { echo "AWS credentials invalid"; exit 1; }
 
-      - name: Install EB CLI
-        run: pip install awsebcli --upgrade
+      - name: Verify EB CLI version
+        run: |
+          eb --version
 
       - name: Deploy to Elastic Beanstalk
         run: |
